@@ -25,7 +25,7 @@ export type SyncStatus = "offline" | "syncing" | "synced" | "error";
 type Listener = () => void;
 let status: SyncStatus = typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "synced";
 let pendingCount = 0;
-let snapshot = { status, pending: pendingCount };
+let snapshot: { status: SyncStatus; pending: number } = { status, pending: pendingCount };
 const listeners = new Set<Listener>();
 let currentUserId: string | null = null;
 let flushing = false;

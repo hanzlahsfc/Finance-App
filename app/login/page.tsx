@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { supabase, hasSupabaseEnv } from "@/lib/supabase";
 import { Icon } from "@/components/Icon";
 
@@ -31,7 +32,7 @@ export default function LoginPage() {
           Running fully offline with demo data. Add NEXT_PUBLIC_SUPABASE_URL and
           NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local to enable sign in and friends.
         </p>
-        <a href="/" className="btn">Open the app</a>
+        <Link href="/" className="btn">Open the app</Link>
       </div>
     );
   }
