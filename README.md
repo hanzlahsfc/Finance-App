@@ -2,6 +2,10 @@
 
 A mobile-first PWA for personal finance + shared expenses between friends — iOS-style UI, works offline, syncs with Supabase.
 
+**Live:** https://hisab-theta-nine.vercel.app
+**Backend:** Supabase project `hisab` (`ukqrrrigektwovzxnoyu`, ap-southeast-1)
+**Local dev backend:** `npx supabase start` → API on `127.0.0.1:56321`, Mailpit on `127.0.0.1:56324`, Studio on `127.0.0.1:56323`
+
 ## Features
 
 - **Weekly pay & bonuses** — log pay per week, auto computes "left to spend"
