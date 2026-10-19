@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hisab
 
-## Getting Started
+A mobile-first PWA for personal finance + shared expenses between friends — iOS-style UI, works offline, syncs with Supabase.
 
-First, run the development server:
+## Features
+
+- **Weekly pay & bonuses** — log pay per week, auto computes "left to spend"
+- **Bills** — weekly/monthly/yearly recurring bills, mark paid per period
+- **Set aside %** — automatic savings carve-out from each week's pay
+- **Transactions** — expense/income/lent/borrowed, auto-categorized (petrol → Transport, biryani → Food…), optional place & counterparty for records/tax
+- **Weekly reports** — spending by category, who you paid / received from, where
+- **Friends & groups** — add friends by username, create groups, log shared activities (e.g. "Biryani"), equal or custom splits, partial payments ("Umar paid 50 of 100"), admin-only edit/delete with admin transfer
+- **Offline-first** — everything reads/writes locally (IndexedDB) and syncs when back online; realtime updates across group members
+- **PWA** — installable to home screen, iOS-style UI (bottom tab bar, bottom sheets, dark theme)
+
+## Setup
+
+### 1. Supabase
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. Open **SQL Editor** → paste & run `supabase/schema.sql`
+3. **Authentication → Providers** → enable Email (magic link is on by default)
+4. **Authentication → URL Configuration**:
+   - Site URL: `http://localhost:3000` (dev) / your Vercel domain (prod)
+   - Redirect URLs: add `<your-domain>/auth/callback` and `http://localhost:3000/auth/callback`
+5. Copy **Project URL** and **anon key** from Settings → API
+
+### 2. Local dev
 
 ```bash
+cp env.example .env.local   # fill in your Supabase URL + anon key
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Deploy to Vercel
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm i -g vercel && vercel
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Or import the repo in the Vercel dashboard. Add the two env vars in
+**Project Settings → Environment Variables**, then redeploy.
 
-## Learn More
+For a custom domain: **Settings → Domains** → add it, update DNS, then add
+`<domain>/auth/callback` to Supabase redirect URLs and set Site URL to it.
 
-To learn more about Next.js, take a look at the following resources:
+## How offline works
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- All reads come from IndexedDB (Dexie) — instant and offline-safe
+- Every write is applied locally, queued in an `outbox` table, and replayed to
+  Supabase in order when connectivity returns
+- A service worker caches the app shell so the app opens with no connection
+- Group data also updates live via Supabase Realtime
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Stack
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 15 (App Router) · Tailwind v4 · Supabase (Postgres + Auth + Realtime) · Dexie.js · custom service worker

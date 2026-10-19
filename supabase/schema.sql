@@ -1,0 +1,276 @@
+-- ============================================================
+-- Hisab — Supabase schema
+-- Run this in the Supabase SQL editor (or via supabase db push).
+-- ============================================================
+
+create extension if not exists pgcrypto;
+
+-- ============ PROFILES ============
+create table public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  username text not null unique,
+  display_name text not null,
+  avatar_url text,
+  currency text not null default 'PKR',
+  savings_percent numeric(5,2) not null default 20,
+  created_at timestamptz not null default now(),
+  constraint username_format check (username ~ '^[a-z0-9_]{3,20}$')
+);
+
+-- ============ FRIENDSHIPS ============
+create table public.friendships (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  friend_id uuid not null references public.profiles(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'accepted')),
+  created_at timestamptz not null default now(),
+  unique (user_id, friend_id),
+  check (user_id <> friend_id)
+);
+
+-- ============ INCOME (weekly pay / bonuses) ============
+create table public.income_entries (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null default 'pay' check (kind in ('pay', 'bonus', 'other')),
+  label text not null default '',
+  amount numeric not null check (amount >= 0),
+  week_start date not null,
+  received_at date not null default current_date,
+  created_at timestamptz not null default now()
+);
+
+-- ============ BILLS ============
+create table public.bills (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  name text not null,
+  amount numeric not null check (amount >= 0),
+  frequency text not null default 'monthly' check (frequency in ('weekly', 'monthly', 'yearly', 'once')),
+  category text not null default 'other',
+  due_day int,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table public.bill_payments (
+  id uuid primary key default gen_random_uuid(),
+  bill_id uuid not null references public.bills(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  amount numeric not null check (amount > 0),
+  period_start date not null,
+  paid_at timestamptz not null default now()
+);
+
+-- ============ TRANSACTIONS ============
+create table public.transactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null default 'expense' check (kind in ('expense', 'income', 'loan_given', 'loan_taken')),
+  amount numeric not null check (amount > 0),
+  category text not null default 'other',
+  note text not null default '',
+  place text not null default '',        -- where it was made (shop, station, app…)
+  counterparty text not null default '', -- paid to / received from whom
+  occurred_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create index idx_transactions_user_time on public.transactions (user_id, occurred_at desc);
+create index idx_income_user_week on public.income_entries (user_id, week_start desc);
+
+-- ============ GROUPS ============
+create table public.groups (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  created_by uuid not null references public.profiles(id),
+  created_at timestamptz not null default now()
+);
+
+create table public.group_members (
+  group_id uuid not null references public.groups(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  added_by uuid references public.profiles(id),
+  added_at timestamptz not null default now(),
+  primary key (group_id, user_id)
+);
+
+-- ============ ACTIVITIES (shared expenses) ============
+create table public.activities (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references public.groups(id) on delete cascade,
+  created_by uuid not null references public.profiles(id),
+  paid_by uuid not null references public.profiles(id),
+  title text not null,
+  total_amount numeric not null check (total_amount > 0),
+  occurred_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create table public.activity_splits (
+  id uuid primary key default gen_random_uuid(),
+  activity_id uuid not null references public.activities(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  owed_amount numeric not null check (owed_amount >= 0),
+  settled_amount numeric not null default 0 check (settled_amount >= 0),
+  unique (activity_id, user_id)
+);
+
+create table public.settlements (
+  id uuid primary key default gen_random_uuid(),
+  activity_id uuid references public.activities(id) on delete cascade,
+  group_id uuid not null references public.groups(id) on delete cascade,
+  from_user uuid not null references public.profiles(id),
+  to_user uuid not null references public.profiles(id),
+  amount numeric not null check (amount > 0),
+  note text not null default '',
+  created_by uuid not null references public.profiles(id),
+  created_at timestamptz not null default now()
+);
+
+create index idx_activities_group on public.activities (group_id, occurred_at desc);
+create index idx_splits_activity on public.activity_splits (activity_id);
+create index idx_settlements_group on public.settlements (group_id, created_at desc);
+
+-- ============ HELPER FUNCTIONS (security definer to avoid RLS recursion) ============
+create or replace function public.is_group_member(p_group_id uuid)
+returns boolean language sql stable security definer set search_path = public as
+$$ select exists (select 1 from group_members where group_id = p_group_id and user_id = auth.uid()) $$;
+
+create or replace function public.is_member_of(p_group_id uuid, p_user_id uuid)
+returns boolean language sql stable security definer set search_path = public as
+$$ select exists (select 1 from group_members where group_id = p_group_id and user_id = p_user_id) $$;
+
+create or replace function public.are_friends(a uuid, b uuid)
+returns boolean language sql stable security definer set search_path = public as
+$$ select exists (
+     select 1 from friendships
+     where status = 'accepted'
+       and ((user_id = a and friend_id = b) or (user_id = b and friend_id = a))
+   ) $$;
+
+-- Record a payment toward an activity split.
+-- Allowed when caller is the debtor (p_from_user = self), the person who paid
+-- the activity (confirming cash received), or the activity admin.
+create or replace function public.record_payment(
+  p_activity_id uuid,
+  p_from_user uuid,
+  p_amount numeric,
+  p_note text default ''
+) returns uuid language plpgsql security definer set search_path = public as
+$$
+declare
+  v_activity public.activities%rowtype;
+  v_split public.activity_splits%rowtype;
+  v_id uuid := gen_random_uuid();
+begin
+  select * into v_activity from public.activities where id = p_activity_id;
+  if not found then raise exception 'activity not found'; end if;
+  if not public.is_group_member(v_activity.group_id) then raise exception 'not a group member'; end if;
+  if auth.uid() <> p_from_user
+     and auth.uid() <> v_activity.paid_by
+     and auth.uid() <> v_activity.created_by then
+    raise exception 'not allowed';
+  end if;
+  select * into v_split from public.activity_splits
+    where activity_id = p_activity_id and user_id = p_from_user;
+  if not found then raise exception 'no split for user'; end if;
+  if p_amount <= 0 or v_split.settled_amount + p_amount > v_split.owed_amount then
+    raise exception 'invalid amount';
+  end if;
+  update public.activity_splits set settled_amount = settled_amount + p_amount where id = v_split.id;
+  insert into public.settlements (id, activity_id, group_id, from_user, to_user, amount, note, created_by)
+    values (v_id, p_activity_id, v_activity.group_id, p_from_user, v_activity.paid_by, p_amount, p_note, auth.uid());
+  return v_id;
+end;
+$$;
+
+-- ============ ROW LEVEL SECURITY ============
+alter table public.profiles enable row level security;
+alter table public.friendships enable row level security;
+alter table public.income_entries enable row level security;
+alter table public.bills enable row level security;
+alter table public.bill_payments enable row level security;
+alter table public.transactions enable row level security;
+alter table public.groups enable row level security;
+alter table public.group_members enable row level security;
+alter table public.activities enable row level security;
+alter table public.activity_splits enable row level security;
+alter table public.settlements enable row level security;
+
+-- profiles: anyone signed in can look up users (needed for friend search);
+-- only you can create/edit your own row.
+create policy profiles_read on public.profiles for select to authenticated using (true);
+create policy profiles_insert on public.profiles for insert to authenticated with check (id = auth.uid());
+create policy profiles_update on public.profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
+
+-- friendships
+create policy friendships_read on public.friendships for select to authenticated
+  using (user_id = auth.uid() or friend_id = auth.uid());
+create policy friendships_insert on public.friendships for insert to authenticated
+  with check (user_id = auth.uid());
+create policy friendships_update on public.friendships for update to authenticated
+  using (user_id = auth.uid() or friend_id = auth.uid());
+create policy friendships_delete on public.friendships for delete to authenticated
+  using (user_id = auth.uid() or friend_id = auth.uid());
+
+-- personal finance tables: owner only
+create policy income_all on public.income_entries for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy bills_all on public.bills for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy bill_payments_all on public.bill_payments for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy transactions_all on public.transactions for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- groups: visible to members; creator manages
+create policy groups_read on public.groups for select to authenticated
+  using (public.is_group_member(id) or created_by = auth.uid());
+create policy groups_insert on public.groups for insert to authenticated
+  with check (created_by = auth.uid());
+create policy groups_update on public.groups for update to authenticated
+  using (created_by = auth.uid());
+create policy groups_delete on public.groups for delete to authenticated
+  using (created_by = auth.uid());
+
+-- group_members: any member can view; any member can add; remove self or creator removes
+create policy group_members_read on public.group_members for select to authenticated
+  using (public.is_group_member(group_id) or user_id = auth.uid());
+create policy group_members_insert on public.group_members for insert to authenticated
+  with check (public.is_group_member(group_id)
+              or exists (select 1 from public.groups g where g.id = group_id and g.created_by = auth.uid()));
+create policy group_members_delete on public.group_members for delete to authenticated
+  using (user_id = auth.uid()
+         or exists (select 1 from public.groups g where g.id = group_id and g.created_by = auth.uid()));
+
+-- activities: members read; members create; only creator edits/deletes.
+-- created_by can be reassigned to another member (admin transfer).
+create policy activities_read on public.activities for select to authenticated
+  using (public.is_group_member(group_id));
+create policy activities_insert on public.activities for insert to authenticated
+  with check (created_by = auth.uid() and public.is_group_member(group_id));
+create policy activities_update on public.activities for update to authenticated
+  using (created_by = auth.uid())
+  with check (public.is_member_of(group_id, created_by));
+create policy activities_delete on public.activities for delete to authenticated
+  using (created_by = auth.uid());
+
+-- activity_splits: members read; activity creator inserts; amounts settle via record_payment()
+create policy splits_read on public.activity_splits for select to authenticated
+  using (exists (select 1 from public.activities a where a.id = activity_id and public.is_group_member(a.group_id)));
+create policy splits_insert on public.activity_splits for insert to authenticated
+  with check (exists (select 1 from public.activities a where a.id = activity_id and a.created_by = auth.uid()));
+create policy splits_delete on public.activity_splits for delete to authenticated
+  using (exists (select 1 from public.activities a where a.id = activity_id and a.created_by = auth.uid()));
+
+-- settlements: members read; inserts go through record_payment()
+create policy settlements_read on public.settlements for select to authenticated
+  using (public.is_group_member(group_id));
+
+-- ============ REALTIME ============
+alter publication supabase_realtime add table public.activities;
+alter publication supabase_realtime add table public.activity_splits;
+alter publication supabase_realtime add table public.settlements;
+alter publication supabase_realtime add table public.group_members;
+alter publication supabase_realtime add table public.friendships;
