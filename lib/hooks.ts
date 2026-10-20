@@ -154,9 +154,11 @@ export function useGoals(userId?: string) {
 /** Set-aside pool: total saved vs. what's earmarked into goals and debts. */
 export function useSavingsPool(userId?: string, savingsPercent = 20) {
   const income = useIncome(userId);
+  const txns = useTransactions(userId);
   const obligations = useObligations(userId);
   const goals = useGoals(userId);
-  const setAsideTotal = (income.reduce((s, i) => s + i.amount, 0) * savingsPercent) / 100;
+  const manual = txns.filter((t) => t.kind === "set_aside").reduce((s, t) => s + t.amount, 0);
+  const setAsideTotal = (income.reduce((s, i) => s + i.amount, 0) * savingsPercent) / 100 + manual;
   const inGoals = goals.reduce((s, g) => s + g.saved_amount, 0);
   const inDebts = obligations.filter((o) => o.status === "open").reduce((s, o) => s + o.reserved_amount, 0);
   const weeklyPlan =

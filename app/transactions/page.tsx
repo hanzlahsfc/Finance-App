@@ -111,7 +111,7 @@ export default function TransactionsPage() {
               <Card>
                 {items.map((t) => {
                   const c = categoryById(t.category);
-                  const out = t.kind === "expense" || t.kind === "loan_given";
+                  const out = t.kind === "expense" || t.kind === "loan_given" || t.kind === "set_aside";
                   return (
                     <ListRow
                       key={t.id}

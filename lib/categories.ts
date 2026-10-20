@@ -20,17 +20,19 @@ export const CATEGORIES: Category[] = [
   { id: "family", label: "Family & Gifts", icon: "🎁", color: "#ff6482", keywords: ["gift", "family", "parents", "eidi", "wedding", "birthday", "ammi", "abu"] },
   { id: "education", label: "Education", icon: "📚", color: "#5e5ce6", keywords: ["course", "book", "tuition", "fee", "exam", "udemy", "school", "university"] },
   { id: "income", label: "Income", icon: "💵", color: "#30d158", keywords: ["salary", "pay", "bonus", "earned", "received", "payment received", "freelance"] },
+  { id: "savings", label: "Savings", icon: "🏦", color: "#5ee5c8", keywords: ["set aside", "save", "savings"] },
   { id: "other", label: "Other", icon: "•", color: "#98989d", keywords: [] },
 ];
 
 export const EXPENSE_CATEGORIES = CATEGORIES.filter(
-  (c) => !["loan_given", "loan_taken", "income"].includes(c.id)
+  (c) => !["loan_given", "loan_taken", "income", "savings"].includes(c.id)
 );
 
 export function categorize(note: string, kind?: string): string {
   const text = note.toLowerCase();
   if (kind === "loan_given") return "loan_given";
   if (kind === "loan_taken") return "loan_taken";
+  if (kind === "set_aside") return "savings";
   if (kind === "income") return "income";
   let best = "other";
   let bestScore = 0;

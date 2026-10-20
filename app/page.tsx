@@ -145,7 +145,7 @@ export default function Home() {
         ) : (
           txns.slice(0, 5).map((t) => {
             const c = categoryById(t.category);
-            const out = t.kind === "expense" || t.kind === "loan_given";
+            const out = t.kind === "expense" || t.kind === "loan_given" || t.kind === "set_aside";
             return (
               <ListRow
                 key={t.id}

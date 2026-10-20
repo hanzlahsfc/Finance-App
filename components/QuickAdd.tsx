@@ -17,6 +17,7 @@ const KIND_OPTIONS: { value: TxnKind; label: string }[] = [
   { value: "income", label: "Income" },
   { value: "loan_given", label: "Lent" },
   { value: "loan_taken", label: "Borrowed" },
+  { value: "set_aside", label: "Set aside" },
 ];
 
 export function QuickAdd({ onClose }: { onClose: () => void }) {
@@ -47,7 +48,7 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState("");
 
   const autoCat = useMemo(() => categorize(note, kind), [note, kind]);
-  const effectiveCat = category ?? autoCat;
+  const effectiveCat = kind === "set_aside" ? "savings" : category ?? autoCat;
   const parsed = parseFloat(amount.replace(/,/g, ""));
 
   const friends = useMemo(
@@ -169,7 +170,7 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
           />
           <input
             className="input"
-            placeholder={kind === "income" || kind === "loan_taken" ? "From whom" : "To whom"}
+            placeholder={kind === "income" || kind === "loan_taken" ? "From whom" : "To whom / where"}
             value={counterparty}
             onChange={(e) => setCounterparty(e.target.value)}
           />
@@ -267,30 +268,39 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-2 px-1">
-        <span className="text-[13px] font-semibold text-sub uppercase tracking-wide">Category</span>
-        {category === null && note.trim() && (
-          <span className="text-[12px] text-tint font-medium flex items-center gap-1">
-            <Icon name="check" size={12} /> auto: {categoryById(autoCat).label}
-          </span>
-        )}
-      </div>
-      <div className="grid grid-cols-4 gap-2 mb-6">
-        {pickerCats.map((c) => (
-          <button
-            key={c.id}
-            className={`chip ${effectiveCat === c.id ? "on" : ""}`}
-            onClick={() => setCategory(c.id === category ? null : c.id)}
-          >
-            <span className="chip-icon" style={{ color: c.color }}>{c.icon}</span>
-            {c.label.split(" ")[0]}
-          </button>
-        ))}
-      </div>
+      {kind === "set_aside" ? (
+        <div className="card card-pad flex items-center gap-3 mb-6">
+          <span className="w-9 h-9 rounded-[10px] bg-[rgba(94,229,200,0.15)] flex items-center justify-center text-teal text-[17px]">🏦</span>
+          <p className="text-sub text-[14px] flex-1">Goes straight into your <span className="text-label font-medium">savings pool</span> — move it to goals or debts in Obligations</p>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between mb-2 px-1">
+            <span className="text-[13px] font-semibold text-sub uppercase tracking-wide">Category</span>
+            {category === null && note.trim() && (
+              <span className="text-[12px] text-tint font-medium flex items-center gap-1">
+                <Icon name="check" size={12} /> auto: {categoryById(autoCat).label}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-4 gap-2 mb-6">
+            {pickerCats.map((c) => (
+              <button
+                key={c.id}
+                className={`chip ${effectiveCat === c.id ? "on" : ""}`}
+                onClick={() => setCategory(c.id === category ? null : c.id)}
+              >
+                <span className="chip-icon" style={{ color: c.color }}>{c.icon}</span>
+                {c.label.split(" ")[0]}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {error && <p className="text-red text-[13px] text-center mb-2">{error}</p>}
       <button className="btn" disabled={!valid || saving} onClick={save}>
-        {saving ? "Saving…" : splitOn ? `Save split · your share ${formatMoney(myShare, currency)}` : "Save"}
+        {saving ? "Saving…" : splitOn ? `Save split · your share ${formatMoney(myShare, currency)}` : kind === "set_aside" ? "Set aside" : "Save"}
       </button>
     </Sheet>
   );

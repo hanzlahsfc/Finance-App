@@ -235,7 +235,7 @@ function BillSheet({ uid, onClose }: { uid: string; onClose: () => void }) {
   const [category, setCategory] = useState("bills");
   const [dueDay, setDueDay] = useState("");
   const parsed = parseFloat(amount.replace(/,/g, ""));
-  const cats = CATEGORIES.filter((c) => !["income", "loan_given", "loan_taken"].includes(c.id));
+  const cats = CATEGORIES.filter((c) => !["income", "loan_given", "loan_taken", "savings", "obligations"].includes(c.id));
 
   return (
     <Sheet title="New bill" onClose={onClose}>

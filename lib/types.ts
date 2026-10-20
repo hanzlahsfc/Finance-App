@@ -1,4 +1,4 @@
-export type TxnKind = "expense" | "income" | "loan_given" | "loan_taken";
+export type TxnKind = "expense" | "income" | "loan_given" | "loan_taken" | "set_aside";
 export type IncomeKind = "pay" | "bonus" | "other";
 export type BillFrequency = "weekly" | "monthly" | "yearly" | "once";
 export type FriendStatus = "pending" | "accepted";
