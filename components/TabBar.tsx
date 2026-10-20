@@ -10,6 +10,7 @@ import { useApp } from "@/lib/store";
 const TABS = [
   { href: "/", label: "Home", icon: "house" as const },
   { href: "/transactions", label: "Activity", icon: "list" as const },
+  { href: "/obligations", label: "Obligations", icon: "coins" as const },
   { href: "/groups", label: "Friends", icon: "people" as const },
   { href: "/reports", label: "Reports", icon: "chart" as const },
 ];

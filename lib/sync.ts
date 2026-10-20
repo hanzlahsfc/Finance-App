@@ -16,6 +16,8 @@ const MIRROR_TABLES = [
   "activities",
   "activity_splits",
   "settlements",
+  "obligations",
+  "savings_goals",
 ] as const;
 
 type MirrorTable = (typeof MIRROR_TABLES)[number];
@@ -187,7 +189,7 @@ export async function pullAll(): Promise<void> {
   emit();
   try {
     // Personal tables
-    const [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes] =
+    const [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes] =
       await Promise.all([
         sb.from("profiles").select("*"),
         sb.from("friendships").select("*"),
@@ -197,8 +199,10 @@ export async function pullAll(): Promise<void> {
         sb.from("transactions").select("*").order("occurred_at", { ascending: false }).limit(2000),
         sb.from("group_members").select("*").eq("user_id", uid),
         sb.from("groups").select("*"),
+        sb.from("obligations").select("*"),
+        sb.from("savings_goals").select("*"),
       ]);
-    for (const r of [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes]) {
+    for (const r of [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes]) {
       if (r.error) throw r.error;
     }
 
@@ -239,6 +243,8 @@ export async function pullAll(): Promise<void> {
       activities,
       activity_splits: splits,
       settlements,
+      obligations: obligRes.data ?? [],
+      savings_goals: goalsRes.data ?? [],
     };
 
     await db().transaction(

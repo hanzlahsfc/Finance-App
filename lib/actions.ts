@@ -16,6 +16,8 @@ import type {
   Activity,
   ActivitySplit,
   Group,
+  Obligation,
+  SavingsGoal,
 } from "./types";
 
 // ---------- transactions ----------
@@ -292,6 +294,102 @@ export async function createSplitWithFriends(input: {
     splits: [...input.splits, { user_id: input.created_by, owed_amount: input.my_share }],
   });
   return groupId;
+}
+
+// ---------- obligations ----------
+
+export async function addObligation(input: {
+  user_id: string;
+  direction: "i_owe" | "owed_to_me";
+  kind: "money" | "item";
+  counterparty: string;
+  title: string;
+  total_amount: number;
+  due_date?: string | null;
+}) {
+  const row: Obligation = {
+    id: uuid(),
+    user_id: input.user_id,
+    direction: input.direction,
+    kind: input.kind,
+    counterparty: input.counterparty.trim(),
+    title: input.title.trim(),
+    total_amount: input.total_amount,
+    settled_amount: 0,
+    status: "open",
+    due_date: input.due_date ?? null,
+  };
+  await enqueue("obligations", "insert", { ...row, localRow: row });
+  return row.id;
+}
+
+export async function payObligation(o: Obligation, amount: number) {
+  const settled = Math.min(o.total_amount, o.settled_amount + amount);
+  const merged: Obligation = {
+    ...o,
+    settled_amount: settled,
+    status: settled >= o.total_amount ? "settled" : "open",
+  };
+  await enqueue("obligations", "update", {
+    id: o.id,
+    localRow: merged,
+    localPatch: { settled_amount: merged.settled_amount, status: merged.status },
+  });
+  // mirror the payment as a transaction so weekly reports stay true
+  await addTransaction({
+    user_id: o.user_id,
+    kind: o.direction === "i_owe" ? "expense" : "income",
+    amount,
+    note: `${o.direction === "i_owe" ? "Paid" : "Received from"} ${o.counterparty}${o.title ? ` — ${o.title}` : ""}`,
+    counterparty: o.counterparty,
+    category: "obligations",
+  });
+}
+
+export async function deleteObligation(id: string) {
+  await enqueue("obligations", "delete", { id });
+}
+
+// ---------- savings goals ----------
+
+export async function addGoal(input: {
+  user_id: string;
+  kind: "need" | "want";
+  title: string;
+  target_amount: number;
+  allocation_percent: number;
+}) {
+  const row: SavingsGoal = {
+    id: uuid(),
+    user_id: input.user_id,
+    kind: input.kind,
+    title: input.title.trim(),
+    target_amount: input.target_amount,
+    saved_amount: 0,
+    allocation_percent: input.allocation_percent,
+    status: "active",
+  };
+  await enqueue("savings_goals", "insert", { ...row, localRow: row });
+  return row.id;
+}
+
+export async function contributeToGoal(g: SavingsGoal, amount: number) {
+  const saved = Math.min(g.target_amount, g.saved_amount + amount);
+  const merged: SavingsGoal = { ...g, saved_amount: saved, status: saved >= g.target_amount ? "done" : "active" };
+  await enqueue("savings_goals", "update", {
+    id: g.id,
+    localRow: merged,
+    localPatch: { saved_amount: merged.saved_amount, status: merged.status },
+  });
+}
+
+export async function updateGoal(g: SavingsGoal, patch: Partial<SavingsGoal>) {
+  const merged = { ...g, ...patch };
+  await enqueue("savings_goals", "update", { id: g.id, localRow: merged, localPatch: patch });
+}
+
+export async function deleteGoal(id: string) {
+  await enqueue("savings_goals", "delete", { id });
 }
 
 /** Resize a photo client-side and push it to the avatars bucket. */

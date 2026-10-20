@@ -100,6 +100,35 @@ export interface ActivitySplit {
   settled_amount: number;
 }
 
+export type ObligationDirection = "i_owe" | "owed_to_me";
+export type GoalKind = "need" | "want";
+
+export interface Obligation {
+  id: string;
+  user_id: string;
+  direction: ObligationDirection;
+  kind: "money" | "item";
+  counterparty: string;
+  title: string;
+  total_amount: number;
+  settled_amount: number;
+  status: "open" | "settled";
+  due_date: string | null;
+  created_at?: string;
+}
+
+export interface SavingsGoal {
+  id: string;
+  user_id: string;
+  kind: GoalKind;
+  title: string;
+  target_amount: number;
+  saved_amount: number;
+  allocation_percent: number;
+  status: "active" | "done";
+  created_at?: string;
+}
+
 export interface Settlement {
   id: string;
   activity_id: string | null;

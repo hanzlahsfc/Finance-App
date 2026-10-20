@@ -3,7 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "./db";
 import { startOfWeek, endOfWeek, toISODate, billPeriodStart } from "./utils";
-import type { Profile, Transaction, Bill, BillPayment } from "./types";
+import type { Profile, Transaction, Bill, BillPayment, Obligation, SavingsGoal } from "./types";
 
 export function useTransactions(userId?: string) {
   return useLiveQuery(
@@ -124,6 +124,30 @@ export function useGroup(groupId?: string) {
     },
     [groupId],
     null
+  );
+}
+
+export function useObligations(userId?: string) {
+  return useLiveQuery(
+    async () => {
+      if (!userId) return [];
+      const rows = await db().obligations.where("user_id").equals(userId).toArray();
+      return rows.sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+    },
+    [userId],
+    [] as Obligation[]
+  );
+}
+
+export function useGoals(userId?: string) {
+  return useLiveQuery(
+    async () => {
+      if (!userId) return [];
+      const rows = await db().savings_goals.where("user_id").equals(userId).toArray();
+      return rows.sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+    },
+    [userId],
+    [] as SavingsGoal[]
   );
 }
 

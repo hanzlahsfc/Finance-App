@@ -16,11 +16,13 @@ const TABLES = [
   "activities",
   "activity_splits",
   "settlements",
+  "obligations",
+  "savings_goals",
 ] as const;
 
 // Tables owned by the signed-in user — user_id gets remapped on import so a
 // backup restores cleanly onto the same account on any device.
-const PERSONAL = new Set(["profiles", "income_entries", "bills", "bill_payments", "transactions"]);
+const PERSONAL = new Set(["profiles", "income_entries", "bills", "bill_payments", "transactions", "obligations", "savings_goals"]);
 
 interface BackupFile {
   app: "hisab";

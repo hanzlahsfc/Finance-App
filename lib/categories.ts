@@ -14,6 +14,7 @@ export const CATEGORIES: Category[] = [
   { id: "shopping", label: "Shopping", icon: "🛍", color: "#bf5af2", keywords: ["shopping", "clothes", "shoes", "shirt", "dress", "daraz", "mall", "bought", "amazon"] },
   { id: "health", label: "Health", icon: "💊", color: "#ff453a", keywords: ["doctor", "medicine", "pharmacy", "hospital", "clinic", "dentist", "checkup", "meds"] },
   { id: "entertainment", label: "Entertainment", icon: "🎬", color: "#ff375f", keywords: ["movie", "cinema", "netflix", "game", "spotify", "concert", "outing", "fun", "ps5", "steam"] },
+  { id: "obligations", label: "Obligations", icon: "🤝", color: "#ff9f0a", keywords: ["obligation", "owe", "debt", "repay", "paid back", "settle"] },
   { id: "loan_given", label: "Loan Given", icon: "↗", color: "#64d2ff", keywords: ["lent", "gave loan", "udhaar diya", "borrowed from me"] },
   { id: "loan_taken", label: "Loan Taken", icon: "↙", color: "#ac8e68", keywords: ["borrowed", "took loan", "udhaar", "owe"] },
   { id: "family", label: "Family & Gifts", icon: "🎁", color: "#ff6482", keywords: ["gift", "family", "parents", "eidi", "wedding", "birthday", "ammi", "abu"] },
