@@ -27,6 +27,7 @@ export default function LoginPage() {
   if (!hasSupabaseEnv()) {
     return (
       <div className="screen flex flex-col items-center justify-center px-8 text-center">
+        <img src="/icons/icon-192.png" alt="Hisab" className="w-[76px] h-[76px] rounded-[22px] mb-5 shadow-[0_10px_30px_rgba(0,200,83,0.35)]" />
         <p className="text-xl font-bold mb-2">Demo mode</p>
         <p className="text-sub text-[15px] mb-6">
           Running fully offline with demo data. Add NEXT_PUBLIC_SUPABASE_URL and
@@ -39,9 +40,7 @@ export default function LoginPage() {
 
   return (
     <div className="screen flex flex-col px-7 pt-24">
-      <div className="w-[72px] h-[72px] rounded-[20px] bg-tint flex items-center justify-center mb-6 shadow-[0_10px_30px_rgba(10,132,255,0.35)]">
-        <Icon name="wallet" size={36} color="#fff" strokeWidth={1.6} />
-      </div>
+      <img src="/icons/icon-192.png" alt="Hisab" className="w-[76px] h-[76px] rounded-[22px] mb-6 shadow-[0_10px_30px_rgba(0,200,83,0.35)]" />
       <h1 className="large-title mb-2">Hisab</h1>
       <p className="text-sub text-[16px] mb-10">
         Weekly pay, bills, spending and shared expenses with friends — all in one place.
