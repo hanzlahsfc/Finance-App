@@ -1,6 +1,7 @@
 "use client";
 
 import { db } from "./db";
+import { supabase } from "./supabase";
 import { enqueue, flush } from "./sync";
 import { categorize } from "./categories";
 import { uuid, weekKey, billPeriodStart } from "./utils";
@@ -177,8 +178,8 @@ export async function removeFriendship(friendshipId: string) {
 
 // ---------- groups ----------
 
-export async function createGroup(userId: string, name: string, memberIds: string[]) {
-  const group: Group = { id: uuid(), name: name.trim(), created_by: userId };
+export async function createGroup(userId: string, name: string, memberIds: string[], adhoc = false) {
+  const group: Group = { id: uuid(), name: name.trim(), created_by: userId, is_adhoc: adhoc };
   const members = [userId, ...memberIds.filter((m) => m !== userId)].map((uid) => ({
     group_id: group.id,
     user_id: uid,
@@ -264,6 +265,59 @@ export async function deleteActivity(activityId: string) {
 export async function transferActivityAdmin(activity: Activity, newAdminId: string) {
   const merged = { ...activity, created_by: newAdminId };
   await enqueue("activities", "update", { id: activity.id, localRow: merged, localPatch: { created_by: newAdminId } });
+}
+
+/**
+ * QuickAdd "split with friends": creates the activity in an existing group,
+ * or in an auto-created ad-hoc group when friends are picked directly.
+ */
+export async function createSplitWithFriends(input: {
+  created_by: string;
+  title: string;
+  total_amount: number;
+  my_share: number;
+  splits: { user_id: string; owed_amount: number }[];
+  group_id?: string;
+}) {
+  let groupId = input.group_id;
+  if (!groupId) {
+    groupId = await createGroup(input.created_by, input.title, input.splits.map((s) => s.user_id), true);
+  }
+  await createActivity({
+    group_id: groupId,
+    created_by: input.created_by,
+    paid_by: input.created_by,
+    title: input.title,
+    total_amount: input.total_amount,
+    splits: [...input.splits, { user_id: input.created_by, owed_amount: input.my_share }],
+  });
+  return groupId;
+}
+
+/** Resize a photo client-side and push it to the avatars bucket. */
+export async function uploadAvatar(uid: string, file: File): Promise<void> {
+  const bitmap = await createImageBitmap(file);
+  const size = 256;
+  const scale = Math.max(size / bitmap.width, size / bitmap.height);
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(bitmap, (size - w) / 2, (size - h) / 2, w, h);
+  const blob = await new Promise<Blob>((res, rej) =>
+    canvas.toBlob((b) => (b ? res(b) : rej(new Error("encode failed"))), "image/jpeg", 0.85)
+  );
+
+  const path = `${uid}/avatar.jpg`;
+  const { error } = await supabase().storage.from("avatars").upload(path, blob, {
+    upsert: true,
+    contentType: "image/jpeg",
+  });
+  if (error) throw error;
+  const { data } = supabase().storage.from("avatars").getPublicUrl(path);
+  await updateProfile(uid, { avatar_url: `${data.publicUrl}?t=${Date.now()}` });
 }
 
 /** Record a payment toward a split. Optimistically updates local split + adds settlement. */

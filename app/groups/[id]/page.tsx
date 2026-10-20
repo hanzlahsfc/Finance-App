@@ -72,7 +72,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
       <div className="flex gap-3 mb-5 overflow-x-auto no-scrollbar">
         {data.members.map((m) => (
           <div key={m.user_id} className="flex flex-col items-center gap-1 shrink-0">
-            <Avatar name={profileMap.get(m.user_id)?.display_name ?? "?"} id={m.user_id} size={46} />
+            <Avatar name={profileMap.get(m.user_id)?.display_name ?? "?"} id={m.user_id} size={46} src={profileMap.get(m.user_id)?.avatar_url} />
             <span className="text-[11px] text-sub max-w-[56px] truncate">
               {m.user_id === uid ? "You" : (profileMap.get(m.user_id)?.display_name ?? "…").split(" ")[0]}
             </span>
@@ -183,7 +183,7 @@ function NewActivitySheet({
   groupId: string;
   uid: string;
   members: GroupMember[];
-  profileMap: Map<string, { display_name: string }>;
+  profileMap: Map<string, { display_name: string; avatar_url?: string | null }>;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState("");
@@ -241,7 +241,7 @@ function NewActivitySheet({
           return (
             <ListRow
               key={m.user_id}
-              icon={<Avatar name={name} id={m.user_id} size={34} />}
+              icon={<Avatar name={name} id={m.user_id} size={34} src={profileMap.get(m.user_id)?.avatar_url} />}
               title={name}
               right={
                 on ? (
@@ -302,7 +302,7 @@ function ActivitySheet({
   settlements: { from_user: string; amount: number; note: string; created_at?: string }[];
   uid: string;
   currency: string;
-  profileMap: Map<string, { display_name: string }>;
+  profileMap: Map<string, { display_name: string; avatar_url?: string | null }>;
   onClose: () => void;
 }) {
   const [paySheet, setPaySheet] = useState<string | null>(null); // from_user
@@ -327,7 +327,7 @@ function ActivitySheet({
             (s.user_id === uid || activity.paid_by === uid || isAdmin);
           return (
             <div key={s.id} className="list-row">
-              <Avatar name={nameOf(s.user_id)} id={s.user_id} size={36} />
+              <Avatar name={nameOf(s.user_id)} id={s.user_id} size={36} src={profileMap.get(s.user_id)?.avatar_url} />
               <div className="flex-1 min-w-0">
                 <div className="text-[15px] font-medium">
                   {nameOf(s.user_id)}
@@ -407,7 +407,7 @@ function ActivitySheet({
             {members.filter((m) => m.user_id !== activity.created_by).map((m) => (
               <ListRow
                 key={m.user_id}
-                icon={<Avatar name={nameOf(m.user_id)} id={m.user_id} size={36} />}
+                icon={<Avatar name={nameOf(m.user_id)} id={m.user_id} size={36} src={profileMap.get(m.user_id)?.avatar_url} />}
                 title={nameOf(m.user_id)}
                 onClick={async () => {
                   await transferActivityAdmin(activity, m.user_id);
@@ -464,7 +464,7 @@ function GroupSettings({
   groupId, name, isCreator, friendIds, profileMap, uid, onClose,
 }: {
   groupId: string; name: string; isCreator: boolean; friendIds: string[];
-  profileMap: Map<string, { display_name: string; username: string }>;
+  profileMap: Map<string, { display_name: string; username: string; avatar_url?: string | null }>;
   uid: string; onClose: () => void;
 }) {
   const [newName, setNewName] = useState(name);
@@ -495,7 +495,7 @@ function GroupSettings({
             return (
               <ListRow
                 key={fid}
-                icon={<Avatar name={p?.display_name ?? "?"} id={fid} size={36} />}
+                icon={<Avatar name={p?.display_name ?? "?"} id={fid} size={36} src={p?.avatar_url} />}
                 title={p?.display_name ?? "…"}
                 subtitle={`@${p?.username ?? ""}`}
                 right={

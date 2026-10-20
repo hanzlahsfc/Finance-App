@@ -20,7 +20,7 @@ export default function Home() {
   const bills = useBills(uid);
   const payments = useBillPayments(uid);
   const groups = useGroups(uid);
-  const { owed } = useOwedToMe(uid);
+  const { owed, iOwe } = useOwedToMe(uid);
 
   const thisWeekKey = weekKey(new Date());
   const weekIncome = income.filter((i) => i.week_start === thisWeekKey);
@@ -43,7 +43,7 @@ export default function Home() {
           <h1 className="large-title">Hi, {profile?.display_name?.split(" ")[0] ?? "…"}</h1>
         </div>
         <Link href="/settings">
-          <Avatar name={profile?.display_name ?? "?"} id={uid ?? "x"} size={42} />
+          <Avatar name={profile?.display_name ?? "?"} id={uid ?? "x"} size={42} src={profile?.avatar_url} />
         </Link>
       </div>
 
@@ -118,8 +118,18 @@ export default function Home() {
         <Link href="/groups">
           <Card className="card-pad">
             <Icon name="people" size={20} className="text-tint mb-2" />
-            <p className="text-[22px] font-bold tabular-nums">{owed > 0 ? formatMoney(owed, currency) : groups.length}</p>
-            <p className="text-sub text-[13px]">{owed > 0 ? "friends owe you" : groups.length === 1 ? "group" : "groups"}</p>
+            {owed > 0 || iOwe > 0 ? (
+              <div className="flex flex-col gap-0.5">
+                {owed > 0 && <p className="text-[18px] font-bold tabular-nums text-green">+{formatMoney(owed, currency)}</p>}
+                {iOwe > 0 && <p className="text-[18px] font-bold tabular-nums text-orange">−{formatMoney(iOwe, currency)}</p>}
+                <p className="text-sub text-[13px]">{owed > 0 && iOwe > 0 ? "owed · you owe" : owed > 0 ? "friends owe you" : "you owe"}</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-[22px] font-bold tabular-nums">{groups.length}</p>
+                <p className="text-sub text-[13px]">{groups.length === 1 ? "group" : "groups"}</p>
+              </>
+            )}
           </Card>
         </Link>
       </div>

@@ -60,7 +60,18 @@ export function avatarColor(id: string): string {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
-export function Avatar({ name, id, size = 38 }: { name: string; id: string; size?: number }) {
+export function Avatar({ name, id, size = 38, src }: { name: string; id: string; size?: number; src?: string | null }) {
+  if (src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={name}
+        className="rounded-full object-cover shrink-0"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   return (
     <span
       className="rounded-full flex items-center justify-center font-semibold text-white shrink-0"

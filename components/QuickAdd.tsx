@@ -2,12 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { Sheet } from "./Sheet";
-import { Segmented } from "./ui";
+import { Segmented, Avatar } from "./ui";
 import { Icon } from "./Icon";
 import { useApp } from "@/lib/store";
-import { addTransaction } from "@/lib/actions";
+import { useFriendships, useGroups, useProfileMap } from "@/lib/hooks";
+import { db } from "@/lib/db";
+import { addTransaction, createSplitWithFriends } from "@/lib/actions";
 import { CATEGORIES, categorize, categoryById } from "@/lib/categories";
-import type { TxnKind } from "@/lib/types";
+import { formatMoney } from "@/lib/utils";
+import type { TxnKind, Group } from "@/lib/types";
 
 const KIND_OPTIONS: { value: TxnKind; label: string }[] = [
   { value: "expense", label: "Expense" },
@@ -17,7 +20,13 @@ const KIND_OPTIONS: { value: TxnKind; label: string }[] = [
 ];
 
 export function QuickAdd({ onClose }: { onClose: () => void }) {
-  const { session } = useApp();
+  const { session, profile } = useApp();
+  const uid = session?.user.id;
+  const currency = profile?.currency ?? "PKR";
+  const friendships = useFriendships(uid);
+  const groups = useGroups(uid);
+  const profileMap = useProfileMap();
+
   const [kind, setKind] = useState<TxnKind>("expense");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -25,28 +34,90 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
   const [counterparty, setCounterparty] = useState("");
   const [showDetails, setShowDetails] = useState(false);
   const [category, setCategory] = useState<string | null>(null); // null = auto
+
+  // split state
+  const [splitOn, setSplitOn] = useState(false);
+  const [splitMode, setSplitMode] = useState<"friends" | "group">("friends");
+  const [pickedFriends, setPickedFriends] = useState<Set<string>>(new Set());
+  const [pickedGroup, setPickedGroup] = useState<Group | null>(null);
+  const [groupMembers, setGroupMembers] = useState<string[]>([]);
+  const [owedAmounts, setOwedAmounts] = useState<Map<string, string>>(new Map());
+
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const autoCat = useMemo(() => categorize(note, kind), [note, kind]);
   const effectiveCat = category ?? autoCat;
   const parsed = parseFloat(amount.replace(/,/g, ""));
-  const valid = !isNaN(parsed) && parsed > 0;
+
+  const friends = useMemo(
+    () =>
+      friendships
+        .filter((f) => f.status === "accepted")
+        .map((f) => (f.user_id === uid ? f.friend_id : f.user_id)),
+    [friendships, uid]
+  );
+
+  const splitTargets: string[] =
+    splitMode === "friends"
+      ? [...pickedFriends]
+      : groupMembers.filter((m) => m !== uid);
+
+  const othersTotal = splitTargets.reduce((s, id) => s + (parseFloat(owedAmounts.get(id) ?? "") || 0), 0);
+  const myShare = (parsed || 0) - othersTotal;
+  const hasSplitAmounts = splitTargets.some((id) => (parseFloat(owedAmounts.get(id) ?? "") || 0) > 0);
+  const splitValid = !splitOn || (splitTargets.length > 0 && hasSplitAmounts && myShare >= 0);
+  const valid = !isNaN(parsed) && parsed > 0 && splitValid;
+
+  async function chooseGroup(g: Group) {
+    setPickedGroup(g);
+    const members = await db().group_members.where("group_id").equals(g.id).toArray();
+    setGroupMembers(members.map((m) => m.user_id));
+  }
+
+  function toggleFriend(id: string) {
+    const s = new Set(pickedFriends);
+    if (s.has(id)) {
+      s.delete(id);
+      const m = new Map(owedAmounts);
+      m.delete(id);
+      setOwedAmounts(m);
+    } else {
+      s.add(id);
+    }
+    setPickedFriends(s);
+  }
 
   async function save() {
-    if (!valid || !session) return;
+    if (!valid || !uid) return;
     setSaving(true);
+    setError("");
     try {
+      if (splitOn) {
+        const splits = splitTargets
+          .map((id) => ({ user_id: id, owed_amount: parseFloat(owedAmounts.get(id) ?? "") || 0 }))
+          .filter((s) => s.owed_amount > 0);
+        await createSplitWithFriends({
+          created_by: uid,
+          title: note || "Shared expense",
+          total_amount: parsed,
+          my_share: myShare,
+          splits,
+          group_id: splitMode === "group" ? pickedGroup?.id : undefined,
+        });
+      }
       await addTransaction({
-        user_id: session.user.id,
+        user_id: uid,
         kind,
-        amount: parsed,
-        note,
+        amount: splitOn ? myShare : parsed,
+        note: splitOn ? `${note} (your share)` : note,
         category: effectiveCat,
         place,
         counterparty,
       });
       onClose();
-    } finally {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save");
       setSaving(false);
     }
   }
@@ -55,6 +126,8 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
     kind === "income"
       ? CATEGORIES.filter((c) => c.id === "income" || c.id === "other")
       : CATEGORIES.filter((c) => !["income"].includes(c.id));
+
+  const nameOf = (id: string) => profileMap.get(id)?.display_name ?? "…";
 
   return (
     <Sheet title="Add transaction" onClose={onClose}>
@@ -103,6 +176,97 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
+      {/* split with friends */}
+      {kind === "expense" && (
+        <div className="mb-4">
+          <button
+            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-[14px] text-[15px] font-medium ${splitOn ? "bg-[rgba(10,132,255,0.15)] text-tint" : "bg-card2 text-label"}`}
+            onClick={() => setSplitOn(!splitOn)}
+          >
+            <span className="flex items-center gap-2"><Icon name="people" size={18} /> Split with friends</span>
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center ${splitOn ? "bg-tint" : "bg-card3"}`}>
+              {splitOn && <Icon name="check" size={14} color="#fff" />}
+            </span>
+          </button>
+
+          {splitOn && (
+            <div className="mt-3">
+              <Segmented
+                options={[
+                  { value: "friends", label: "Pick friends" },
+                  { value: "group", label: "Pick group" },
+                ]}
+                value={splitMode}
+                onChange={setSplitMode}
+              />
+
+              {splitMode === "friends" ? (
+                <>
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar my-3">
+                    {friends.length === 0 && (
+                      <p className="text-sub2 text-[13px] py-2">No friends yet — add some from the Friends tab</p>
+                    )}
+                    {friends.map((fid) => {
+                      const on = pickedFriends.has(fid);
+                      const p = profileMap.get(fid);
+                      return (
+                        <button
+                          key={fid}
+                          className={`pill shrink-0 flex items-center gap-1.5 ${on ? "bg-tint text-white" : "bg-card2 text-sub"}`}
+                          onClick={() => toggleFriend(fid)}
+                        >
+                          <Avatar name={p?.display_name ?? "?"} id={fid} size={18} src={p?.avatar_url} />
+                          {(p?.display_name ?? "…").split(" ")[0]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {splitTargets.map((fid) => (
+                    <SplitAmountRow key={fid} id={fid} name={nameOf(fid)} avatar={profileMap.get(fid)?.avatar_url}
+                      value={owedAmounts.get(fid) ?? ""}
+                      onChange={(v) => setOwedAmounts(new Map(owedAmounts).set(fid, v))} />
+                  ))}
+                </>
+              ) : (
+                <>
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar my-3">
+                    {groups.length === 0 && (
+                      <p className="text-sub2 text-[13px] py-2">No groups yet — or pick friends instead</p>
+                    )}
+                    {groups.map((g) => (
+                      <button
+                        key={g.id}
+                        className={`pill shrink-0 ${pickedGroup?.id === g.id ? "bg-tint text-white" : "bg-card2 text-sub"}`}
+                        onClick={() => void chooseGroup(g)}
+                      >
+                        {g.name}
+                      </button>
+                    ))}
+                  </div>
+                  {splitTargets.map((mid) => (
+                    <SplitAmountRow key={mid} id={mid} name={nameOf(mid)} avatar={profileMap.get(mid)?.avatar_url}
+                      value={owedAmounts.get(mid) ?? ""}
+                      onChange={(v) => setOwedAmounts(new Map(owedAmounts).set(mid, v))} />
+                  ))}
+                </>
+              )}
+
+              {splitTargets.length > 0 && (
+                <div className="flex justify-between items-center px-2 py-2.5 mt-1 rounded-xl bg-card2">
+                  <span className="text-[14px] text-sub">Your share</span>
+                  <span className={`text-[15px] font-bold tabular-nums ${myShare < 0 ? "text-red" : "text-green"}`}>
+                    {formatMoney(myShare, currency)}
+                  </span>
+                </div>
+              )}
+              {splitOn && myShare < 0 && (
+                <p className="text-red text-[12px] px-1 mt-1">Friends&apos; amounts exceed the total</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-2 px-1">
         <span className="text-[13px] font-semibold text-sub uppercase tracking-wide">Category</span>
         {category === null && note.trim() && (
@@ -124,9 +288,37 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
         ))}
       </div>
 
+      {error && <p className="text-red text-[13px] text-center mb-2">{error}</p>}
       <button className="btn" disabled={!valid || saving} onClick={save}>
-        {saving ? "Saving…" : "Save"}
+        {saving ? "Saving…" : splitOn ? `Save split · your share ${formatMoney(myShare, currency)}` : "Save"}
       </button>
     </Sheet>
+  );
+}
+
+function SplitAmountRow({
+  id, name, avatar, value, onChange,
+}: {
+  id: string; name: string; avatar?: string | null; value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="list-row !px-2">
+      <Avatar name={name} id={id} size={32} src={avatar} />
+      <div className="flex-1 min-w-0">
+        <div className="text-[15px] font-medium truncate">{name}</div>
+      </div>
+      <div className="flex items-center gap-1">
+        <span className="text-sub text-[13px]">Rs</span>
+        <input
+          className="input !py-2 text-right tabular-nums"
+          style={{ width: 96 }}
+          placeholder="0"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => onChange(e.target.value.replace(/[^\d.]/g, ""))}
+        />
+      </div>
+    </div>
   );
 }

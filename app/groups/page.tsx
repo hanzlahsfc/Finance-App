@@ -49,7 +49,7 @@ export default function GroupsPage() {
               return (
                 <ListRow
                   key={f.id}
-                  icon={<Avatar name={p?.display_name ?? "?"} id={f.user_id} size={36} />}
+                  icon={<Avatar name={p?.display_name ?? "?"} id={f.user_id} size={36} src={p?.avatar_url} />}
                   title={p?.display_name ?? "…"}
                   subtitle={`@${p?.username ?? ""} wants to add you`}
                   right={
@@ -73,10 +73,10 @@ export default function GroupsPage() {
         </button>
       </div>
       <Card className="mb-6">
-        {groups.length === 0 ? (
+        {groups.filter((g) => !g.is_adhoc).length === 0 ? (
           <EmptyState icon="people" title="No groups yet" hint="Create a group for trips, dinners and shared expenses" />
         ) : (
-          groups.map((g) => (
+          groups.filter((g) => !g.is_adhoc).map((g) => (
             <Link href={`/groups/${g.id}`} key={g.id}>
               <ListRow
                 icon="people"
@@ -88,6 +88,25 @@ export default function GroupsPage() {
           ))
         )}
       </Card>
+
+      {/* ad-hoc splits from QuickAdd */}
+      {groups.some((g) => g.is_adhoc) && (
+        <>
+          <SectionTitle>Shared splits</SectionTitle>
+          <Card className="mb-6">
+            {groups.filter((g) => g.is_adhoc).map((g) => (
+              <Link href={`/groups/${g.id}`} key={g.id}>
+                <ListRow
+                  icon="receipt"
+                  iconBg="rgba(255,159,10,0.15)"
+                  title={g.name}
+                  subtitle="Split from a transaction"
+                />
+              </Link>
+            ))}
+          </Card>
+        </>
+      )}
 
       {/* friends list */}
       <SectionTitle>Friends</SectionTitle>
@@ -102,7 +121,7 @@ export default function GroupsPage() {
               return (
                 <ListRow
                   key={f.id}
-                  icon={<Avatar name={p?.display_name ?? "?"} id={otherId} size={36} />}
+                  icon={<Avatar name={p?.display_name ?? "?"} id={otherId} size={36} src={p?.avatar_url} />}
                   title={p?.display_name ?? "…"}
                   subtitle={`@${p?.username ?? ""}`}
                   right={
@@ -118,7 +137,7 @@ export default function GroupsPage() {
               return (
                 <ListRow
                   key={f.id}
-                  icon={<Avatar name={p?.display_name ?? "?"} id={f.friend_id} size={36} />}
+                  icon={<Avatar name={p?.display_name ?? "?"} id={f.friend_id} size={36} src={p?.avatar_url} />}
                   title={p?.display_name ?? "…"}
                   subtitle="Request sent"
                   right={<span className="pill bg-card2 text-sub">Pending</span>}
@@ -215,7 +234,7 @@ function AddFriendSheet({ uid, existing, onClose }: { uid: string; existing: { u
           results.map((p) => (
             <ListRow
               key={p.id}
-              icon={<Avatar name={p.display_name} id={p.id} size={36} />}
+              icon={<Avatar name={p.display_name} id={p.id} size={36} src={p.avatar_url} />}
               title={p.display_name}
               subtitle={`@${p.username}`}
               right={

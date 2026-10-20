@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp, useSyncState } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
-import { updateProfile } from "@/lib/actions";
+import { updateProfile, uploadAvatar } from "@/lib/actions";
 import { pullAll, flush } from "@/lib/sync";
 import { exportData, importData } from "@/lib/backup";
 import { Card, SectionTitle, ListRow, Avatar, Segmented } from "@/components/ui";
@@ -41,7 +41,7 @@ export default function SettingsPage() {
 
       <Card className="mb-6">
         <ListRow
-          icon={<Avatar name={profile?.display_name ?? "?"} id={session.user.id} size={44} />}
+          icon={<Avatar name={profile?.display_name ?? "?"} id={session.user.id} size={44} src={profile?.avatar_url} />}
           title={profile?.display_name ?? "…"}
           subtitle={`@${profile?.username ?? ""} · ${session.user.email ?? ""}`}
           onClick={() => setEditOpen(true)}
@@ -155,9 +155,42 @@ function EditProfileSheet({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState(profile?.display_name ?? "");
   const [savings, setSavings] = useState(String(profile?.savings_percent ?? 20));
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [photoErr, setPhotoErr] = useState("");
+  const photoRef = useRef<HTMLInputElement>(null);
 
   return (
     <Sheet title="Edit profile" onClose={onClose}>
+      <div className="flex flex-col items-center mb-5">
+        <Avatar name={profile?.display_name ?? "?"} id={session!.user.id} size={80} src={profile?.avatar_url} />
+        <button
+          className="text-tint text-[15px] font-medium mt-3"
+          disabled={uploading}
+          onClick={() => photoRef.current?.click()}
+        >
+          {uploading ? "Uploading…" : "Change photo"}
+        </button>
+        {photoErr && <p className="text-red text-[12px] mt-1">{photoErr}</p>}
+        <input
+          ref={photoRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (!f) return;
+            setUploading(true);
+            setPhotoErr("");
+            try {
+              await uploadAvatar(session!.user.id, f);
+            } catch {
+              setPhotoErr(navigator.onLine ? "Upload failed — try again" : "Needs a connection to upload");
+            }
+            setUploading(false);
+          }}
+        />
+      </div>
       <label className="section-title">Display name</label>
       <input className="input mb-4" value={name} onChange={(e) => setName(e.target.value)} />
       <label className="section-title">Set aside %</label>
