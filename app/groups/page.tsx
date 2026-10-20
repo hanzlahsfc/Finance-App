@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useApp } from "@/lib/store";
 import { useFriendships, useGroups, useProfileMap } from "@/lib/hooks";
 import { db } from "@/lib/db";
+import { supabase, hasSupabaseEnv } from "@/lib/supabase";
 import { sendFriendRequest, acceptFriendRequest, removeFriendship, createGroup } from "@/lib/actions";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
@@ -140,11 +141,48 @@ function AddFriendSheet({ uid, existing, onClose }: { uid: string; existing: { u
   const [sent, setSent] = useState<Set<string>>(new Set());
   const [searching, setSearching] = useState(false);
 
-  async function search(term: string) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function search(term: string) {
     setQ(term);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => void runSearch(term), 300);
+  }
+
+  async function runSearch(term: string) {
     const t = term.trim().toLowerCase();
     if (t.length < 2) { setResults([]); return; }
     setSearching(true);
+
+    // Online: ask the server so brand-new signups are found too.
+    if (navigator.onLine && hasSupabaseEnv()) {
+      try {
+        const pattern = t.replace(/[%_,]/g, "");
+        if (pattern) {
+          const { data, error } = await supabase()
+            .from("profiles")
+            .select("id, username, display_name")
+            .neq("id", uid)
+            .or(`username.ilike.%${pattern}%,display_name.ilike.%${pattern}%`)
+            .limit(10);
+          if (!error && data) {
+            // mirror into local cache so names resolve elsewhere — merge to
+            // keep fields the partial select didn't return
+            const merged = await Promise.all(
+              data.map(async (d) => ({
+                ...(await db().profiles.get(d.id)),
+                ...d,
+              }))
+            );
+            await db().profiles.bulkPut(merged as Profile[]);
+            setResults(data as Profile[]);
+            setSearching(false);
+            return;
+          }
+        }
+      } catch { /* fall through to local */ }
+    }
+
     const rows = await db()
       .profiles.filter((p) => p.id !== uid && (p.username.includes(t) || p.display_name.toLowerCase().includes(t)))
       .limit(10)
