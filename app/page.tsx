@@ -38,12 +38,9 @@ export default function Home() {
     <div className="screen px-5 pt-14">
       {/* header */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <img src="/icons/icon-192.png" alt="Hisab" className="w-11 h-11 rounded-[13px]" />
-          <div>
-            <p className="text-sub text-[14px]">{formatDayLabel(new Date().toISOString())}</p>
-            <h1 className="text-[26px] font-bold tracking-tight leading-tight">Hi, {profile?.display_name?.split(" ")[0] ?? "…"}</h1>
-          </div>
+        <div>
+          <p className="text-sub text-[14px]">{formatDayLabel(new Date().toISOString())}</p>
+          <h1 className="large-title">Hi, {profile?.display_name?.split(" ")[0] ?? "…"}</h1>
         </div>
         <Link href="/settings">
           <Avatar name={profile?.display_name ?? "?"} id={uid ?? "x"} size={42} src={profile?.avatar_url} />
