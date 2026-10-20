@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp, useSyncState } from "@/lib/store";
@@ -11,6 +11,7 @@ import { exportData, importData } from "@/lib/backup";
 import { Card, SectionTitle, ListRow, Avatar, Segmented } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
+import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
 
 const CURRENCIES = ["PKR", "USD", "EUR", "GBP", "AED", "INR"];
 
@@ -20,6 +21,8 @@ export default function SettingsPage() {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [theme, setTheme] = useState<ThemePref>("dark");
+  useEffect(() => setTheme(getThemePref()), []);
   const [backupMsg, setBackupMsg] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -67,6 +70,27 @@ export default function SettingsPage() {
           title="Set aside from pay"
           right={<span className="text-[15px] font-semibold">{profile?.savings_percent ?? 20}%</span>}
         />
+      </Card>
+
+      <SectionTitle>Appearance</SectionTitle>
+      <Card className="mb-6">
+        <div className="list-row !flex-col !items-stretch gap-2.5">
+          <Segmented
+            options={[
+              { value: "dark", label: "Dark" },
+              { value: "light", label: "Light" },
+              { value: "auto", label: "Auto" },
+            ]}
+            value={theme}
+            onChange={(v) => {
+              setTheme(v as ThemePref);
+              setThemePref(v as ThemePref);
+            }}
+          />
+          <p className="text-sub2 text-[12px] px-1">
+            {theme === "auto" ? "Follows your device setting" : theme === "light" ? "Light iOS look" : "Dark iOS look"}
+          </p>
+        </div>
       </Card>
 
       <SectionTitle>Reports</SectionTitle>
