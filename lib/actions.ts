@@ -305,6 +305,7 @@ export async function addObligation(input: {
   counterparty: string;
   title: string;
   total_amount: number;
+  weekly_amount?: number;
   due_date?: string | null;
 }) {
   const row: Obligation = {
@@ -316,6 +317,8 @@ export async function addObligation(input: {
     title: input.title.trim(),
     total_amount: input.total_amount,
     settled_amount: 0,
+    reserved_amount: 0,
+    weekly_amount: input.weekly_amount ?? 0,
     status: "open",
     due_date: input.due_date ?? null,
   };
@@ -323,17 +326,35 @@ export async function addObligation(input: {
   return row.id;
 }
 
+export async function updateObligation(o: Obligation, patch: Partial<Obligation>) {
+  const merged = { ...o, ...patch };
+  await enqueue("obligations", "update", { id: o.id, localRow: merged, localPatch: patch });
+}
+
+/** Earmark set-aside money toward a debt (doesn't pay it yet). */
+export async function reserveForObligation(o: Obligation, amount: number) {
+  const max = o.total_amount - o.settled_amount;
+  await updateObligation(o, {
+    reserved_amount: Math.min(o.reserved_amount + amount, max),
+  });
+}
+
 export async function payObligation(o: Obligation, amount: number) {
   const settled = Math.min(o.total_amount, o.settled_amount + amount);
   const merged: Obligation = {
     ...o,
     settled_amount: settled,
+    reserved_amount: Math.max(0, o.reserved_amount - amount),
     status: settled >= o.total_amount ? "settled" : "open",
   };
   await enqueue("obligations", "update", {
     id: o.id,
     localRow: merged,
-    localPatch: { settled_amount: merged.settled_amount, status: merged.status },
+    localPatch: {
+      settled_amount: merged.settled_amount,
+      reserved_amount: merged.reserved_amount,
+      status: merged.status,
+    },
   });
   // mirror the payment as a transaction so weekly reports stay true
   await addTransaction({
@@ -357,7 +378,8 @@ export async function addGoal(input: {
   kind: "need" | "want";
   title: string;
   target_amount: number;
-  allocation_percent: number;
+  weekly_amount: number;
+  priority: "high" | "normal" | "low";
 }) {
   const row: SavingsGoal = {
     id: uuid(),
@@ -366,7 +388,8 @@ export async function addGoal(input: {
     title: input.title.trim(),
     target_amount: input.target_amount,
     saved_amount: 0,
-    allocation_percent: input.allocation_percent,
+    weekly_amount: input.weekly_amount,
+    priority: input.priority,
     status: "active",
   };
   await enqueue("savings_goals", "insert", { ...row, localRow: row });

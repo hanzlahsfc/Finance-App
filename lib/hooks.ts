@@ -151,6 +151,21 @@ export function useGoals(userId?: string) {
   );
 }
 
+/** Set-aside pool: total saved vs. what's earmarked into goals and debts. */
+export function useSavingsPool(userId?: string, savingsPercent = 20) {
+  const income = useIncome(userId);
+  const obligations = useObligations(userId);
+  const goals = useGoals(userId);
+  const setAsideTotal = (income.reduce((s, i) => s + i.amount, 0) * savingsPercent) / 100;
+  const inGoals = goals.reduce((s, g) => s + g.saved_amount, 0);
+  const inDebts = obligations.filter((o) => o.status === "open").reduce((s, o) => s + o.reserved_amount, 0);
+  const weeklyPlan =
+    goals.filter((g) => g.status === "active").reduce((s, g) => s + g.weekly_amount, 0) +
+    obligations.filter((o) => o.status === "open").reduce((s, o) => s + o.weekly_amount, 0);
+  const free = Math.max(0, setAsideTotal - inGoals - inDebts);
+  return { setAsideTotal, inGoals, inDebts, free, weeklyPlan };
+}
+
 /** Total friends still owe me across all groups (splits on activities I paid). */
 export function useOwedToMe(userId?: string): { owed: number; iOwe: number } {
   return useLiveQuery(

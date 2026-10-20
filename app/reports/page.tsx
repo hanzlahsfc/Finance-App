@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { useTransactions, useIncome } from "@/lib/hooks";
 import { formatMoney, startOfWeek, endOfWeek, weekKey, weekRangeLabel } from "@/lib/utils";
@@ -10,6 +11,7 @@ import { categoryById } from "@/lib/categories";
 import type { Transaction } from "@/lib/types";
 
 export default function ReportsPage() {
+  const router = useRouter();
   const { session, profile } = useApp();
   const currency = profile?.currency ?? "PKR";
   const txns = useTransactions(session?.user.id);
@@ -56,7 +58,12 @@ export default function ReportsPage() {
 
   return (
     <div className="screen px-5 pt-14">
-      <h1 className="large-title mb-4">Reports</h1>
+      <div className="flex items-center gap-3 mb-4">
+        <button onClick={() => router.back()} className="text-tint p-1 -ml-1" aria-label="Back">
+          <Icon name="chevronLeft" size={26} />
+        </button>
+        <h1 className="large-title">Reports</h1>
+      </div>
 
       {/* week picker */}
       <div className="card card-pad flex items-center justify-between mb-6">

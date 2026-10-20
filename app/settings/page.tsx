@@ -69,6 +69,18 @@ export default function SettingsPage() {
         />
       </Card>
 
+      <SectionTitle>Reports</SectionTitle>
+      <Card className="mb-6">
+        <Link href="/reports">
+          <ListRow
+            icon="chart"
+            title="Spending reports"
+            subtitle="Weekly categories, places & people"
+            right={<Icon name="chevronRight" size={16} className="text-sub2" />}
+          />
+        </Link>
+      </Card>
+
       <SectionTitle>Data</SectionTitle>
       <Card className="mb-6">
         <ListRow

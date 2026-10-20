@@ -2,15 +2,24 @@
 
 import { useState } from "react";
 import { useApp } from "@/lib/store";
-import { useObligations, useGoals, useOwedToMe, useIncome, useFriendships, useProfileMap } from "@/lib/hooks";
-import { formatMoney, formatDate, weekKey } from "@/lib/utils";
+import { useObligations, useGoals, useOwedToMe, useFriendships, useProfileMap, useSavingsPool } from "@/lib/hooks";
+import { formatMoney, formatDate } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Segmented, EmptyState } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
-import { addObligation, payObligation, deleteObligation, addGoal, contributeToGoal, updateGoal, deleteGoal } from "@/lib/actions";
-import type { Obligation, SavingsGoal, ObligationDirection, GoalKind } from "@/lib/types";
+import {
+  addObligation, payObligation, deleteObligation, updateObligation, reserveForObligation,
+  addGoal, contributeToGoal, updateGoal, deleteGoal,
+} from "@/lib/actions";
+import type { Obligation, SavingsGoal, ObligationDirection, GoalKind, Priority } from "@/lib/types";
 
 type Tab = "debts" | "goals";
+const PRIO_ORDER: Record<Priority, number> = { high: 0, normal: 1, low: 2 };
+const PRIO_STYLE: Record<Priority, string> = {
+  high: "bg-[rgba(255,69,58,0.15)] text-red",
+  normal: "bg-card2 text-sub",
+  low: "bg-card2 text-sub2",
+};
 
 export default function ObligationsPage() {
   const { session, profile } = useApp();
@@ -20,6 +29,7 @@ export default function ObligationsPage() {
   const [tab, setTab] = useState<Tab>("debts");
   const obligations = useObligations(uid);
   const goals = useGoals(uid);
+  const pool = useSavingsPool(uid, profile?.savings_percent ?? 20);
   const { owed: groupOwed, iOwe: groupIOwe } = useOwedToMe(uid);
 
   const [addObligOpen, setAddObligOpen] = useState(false);
@@ -51,6 +61,9 @@ export default function ObligationsPage() {
         value={tab}
         onChange={setTab}
       />
+      <div className="h-4" />
+
+      <PoolCard pool={pool} currency={currency} />
       <div className="h-5" />
 
       {tab === "debts" ? (
@@ -107,28 +120,60 @@ export default function ObligationsPage() {
           )}
         </>
       ) : (
-        <GoalsView
-          goals={goals}
-          uid={uid!}
-          currency={currency}
-          savingsPercent={profile?.savings_percent ?? 20}
-          onSelect={setSelGoal}
-        />
+        <GoalsView goals={goals} currency={currency} onSelect={setSelGoal} />
       )}
 
       {addObligOpen && <AddObligationSheet uid={uid!} onClose={() => setAddObligOpen(false)} />}
-      {addGoalOpen && <AddGoalSheet uid={uid!} goals={goals} onClose={() => setAddGoalOpen(false)} />}
+      {addGoalOpen && <AddGoalSheet uid={uid!} onClose={() => setAddGoalOpen(false)} />}
       {selOblig && (
-        <ObligationDetail o={obligations.find((x) => x.id === selOblig.id) ?? selOblig} currency={currency} onClose={() => setSelOblig(null)} />
+        <ObligationDetail
+          o={obligations.find((x) => x.id === selOblig.id) ?? selOblig}
+          pool={pool}
+          currency={currency}
+          onClose={() => setSelOblig(null)}
+        />
       )}
       {selGoal && (
-        <GoalDetail g={goals.find((x) => x.id === selGoal.id) ?? selGoal} currency={currency} onClose={() => setSelGoal(null)} />
+        <GoalDetail
+          g={goals.find((x) => x.id === selGoal.id) ?? selGoal}
+          pool={pool}
+          currency={currency}
+          onClose={() => setSelGoal(null)}
+        />
       )}
     </div>
   );
 }
 
-// ---------- shared bits ----------
+// ---------- savings pool ----------
+
+function PoolCard({ pool, currency }: { pool: ReturnType<typeof useSavingsPool>; currency: string }) {
+  return (
+    <Card className="card-pad">
+      <div className="flex justify-between items-baseline mb-1">
+        <span className="text-[13px] font-semibold text-sub uppercase tracking-wide">Savings pool</span>
+        <span className="text-[20px] font-bold tabular-nums text-teal">{formatMoney(pool.free, currency)}</span>
+      </div>
+      <div className="flex justify-between items-baseline text-[13px] text-sub">
+        <span>Set aside so far</span>
+        <span className="tabular-nums">{formatMoney(pool.setAsideTotal, currency)}</span>
+      </div>
+      <div className="flex justify-between items-baseline text-[13px] text-sub">
+        <span>In goals · earmarked for debts</span>
+        <span className="tabular-nums">{formatMoney(pool.inGoals, currency)} · {formatMoney(pool.inDebts, currency)}</span>
+      </div>
+      {pool.weeklyPlan > 0 && (
+        <div className="flex justify-between items-baseline text-[13px] text-sub mt-1 pt-1.5 border-t border-card2">
+          <span>Planned each week</span>
+          <span className="tabular-nums text-label font-medium">{formatMoney(pool.weeklyPlan, currency)}</span>
+        </div>
+      )}
+      {pool.setAsideTotal === 0 && <p className="text-sub2 text-[12px] mt-1">Log pay to build your set-aside pool</p>}
+    </Card>
+  );
+}
+
+// ---------- debts ----------
 
 function ObligationRow({ o, currency, onClick }: { o: Obligation; currency: string; onClick: () => void }) {
   const rem = Math.max(0, o.total_amount - o.settled_amount);
@@ -141,23 +186,37 @@ function ObligationRow({ o, currency, onClick }: { o: Obligation; currency: stri
         </span>
         <div className="flex-1 min-w-0">
           <div className="text-[16px] font-medium truncate">{o.counterparty}</div>
-          <div className="text-[13px] text-sub truncate">{o.title || (o.kind === "item" ? "Item" : "Money")}{o.due_date ? ` · due ${formatDate(o.due_date)}` : ""}</div>
+          <div className="text-[13px] text-sub truncate">
+            {o.title || (o.kind === "item" ? "Item" : "Money")}
+            {o.due_date ? ` · due ${formatDate(o.due_date)}` : ""}
+            {o.weekly_amount > 0 ? ` · ${formatMoney(o.weekly_amount, currency)}/wk` : ""}
+          </div>
         </div>
         <div className="text-right">
           <p className="text-[15px] font-semibold tabular-nums">{formatMoney(rem, currency)}</p>
           <p className="text-[12px] text-sub tabular-nums">of {formatMoney(o.total_amount, currency)}</p>
         </div>
       </div>
-      {o.settled_amount > 0 && (
+      {(o.settled_amount > 0 || o.reserved_amount > 0) && (
         <div className="progress-track">
-          <div className="progress-fill" style={{ width: `${pct}%`, background: o.direction === "i_owe" ? "var(--color-orange)" : "var(--color-green)" }} />
+          <div
+            className="progress-fill"
+            style={{
+              position: "absolute",
+              width: `${Math.min(100, pct + (o.reserved_amount / o.total_amount) * 100)}%`,
+              background: o.direction === "i_owe" ? "var(--color-orange)" : "var(--color-green)",
+              opacity: 0.35,
+            }}
+          />
+          <div className="progress-fill" style={{ position: "absolute", width: `${pct}%`, background: o.direction === "i_owe" ? "var(--color-orange)" : "var(--color-green)" }} />
         </div>
+      )}
+      {o.reserved_amount > 0 && (
+        <p className="text-[12px] text-teal px-0.5 -mt-1">{formatMoney(o.reserved_amount, currency)} set aside</p>
       )}
     </div>
   );
 }
-
-// ---------- debts sheets ----------
 
 function AddObligationSheet({ uid, onClose }: { uid: string; onClose: () => void }) {
   const friendships = useFriendships(uid);
@@ -167,6 +226,7 @@ function AddObligationSheet({ uid, onClose }: { uid: string; onClose: () => void
   const [who, setWho] = useState("");
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
+  const [weekly, setWeekly] = useState("");
   const [due, setDue] = useState("");
   const [saving, setSaving] = useState(false);
   const parsed = parseFloat(amount.replace(/,/g, ""));
@@ -216,6 +276,10 @@ function AddObligationSheet({ uid, onClose }: { uid: string; onClose: () => void
         <span className="text-sub text-[15px] font-medium">Rs</span>
         <input className="input" placeholder={kind === "item" ? "Value" : "Amount"} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))} />
       </div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-sub text-[15px] font-medium">Rs</span>
+        <input className="input" placeholder="Weekly plan — optional (e.g. 3,000/wk)" inputMode="decimal" value={weekly} onChange={(e) => setWeekly(e.target.value.replace(/[^\d.,]/g, ""))} />
+      </div>
       <input className="input mb-6" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
 
       <button
@@ -223,7 +287,12 @@ function AddObligationSheet({ uid, onClose }: { uid: string; onClose: () => void
         disabled={!who.trim() || !parsed || saving}
         onClick={async () => {
           setSaving(true);
-          await addObligation({ user_id: uid, direction, kind, counterparty: who, title, total_amount: parsed, due_date: due || null });
+          await addObligation({
+            user_id: uid, direction, kind, counterparty: who, title,
+            total_amount: parsed,
+            weekly_amount: parseFloat(weekly.replace(/,/g, "")) || 0,
+            due_date: due || null,
+          });
           onClose();
         }}
       >
@@ -233,8 +302,10 @@ function AddObligationSheet({ uid, onClose }: { uid: string; onClose: () => void
   );
 }
 
-function ObligationDetail({ o, currency, onClose }: { o: Obligation; currency: string; onClose: () => void }) {
+function ObligationDetail({ o, pool, currency, onClose }: { o: Obligation; pool: ReturnType<typeof useSavingsPool>; currency: string; onClose: () => void }) {
   const [payOpen, setPayOpen] = useState(false);
+  const [fundOpen, setFundOpen] = useState(false);
+  const [weekly, setWeekly] = useState(String(o.weekly_amount || ""));
   const rem = Math.max(0, o.total_amount - o.settled_amount);
   return (
     <Sheet title={o.counterparty} onClose={onClose}>
@@ -244,21 +315,44 @@ function ObligationDetail({ o, currency, onClose }: { o: Obligation; currency: s
         <span className={`pill mt-3 ${o.status === "settled" ? "bg-[rgba(48,209,88,0.15)] text-green" : "bg-[rgba(255,159,10,0.15)] text-orange"}`}>
           {o.status === "settled" ? "Settled" : o.direction === "i_owe" ? "You owe" : "They owe you"}
         </span>
+        {o.reserved_amount > 0 && (
+          <p className="text-teal text-[13px] mt-2">{formatMoney(o.reserved_amount, currency)} set aside from your pool</p>
+        )}
         {o.settled_amount > 0 && (
           <div className="progress-track mt-4 mx-8">
             <div className="progress-fill" style={{ width: `${(o.settled_amount / o.total_amount) * 100}%`, background: "var(--color-tint)" }} />
           </div>
         )}
       </div>
+
       {o.status === "open" && (
-        <button className="btn mt-3" onClick={() => setPayOpen(true)}>
-          {o.direction === "i_owe" ? "Record a payment" : "Record received"}
-        </button>
+        <>
+          <label className="section-title">Weekly plan</label>
+          <div className="flex items-center gap-2 mb-4">
+            <input className="input" inputMode="decimal" placeholder="e.g. 3,000" value={weekly} onChange={(e) => setWeekly(e.target.value.replace(/[^\d.,]/g, ""))} />
+            <button
+              className="btn !w-auto px-5"
+              disabled={String(o.weekly_amount || "") === weekly}
+              onClick={() => void updateObligation(o, { weekly_amount: parseFloat(weekly.replace(/,/g, "")) || 0 })}
+            >
+              /wk
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button className="btn" onClick={() => setPayOpen(true)}>
+              {o.direction === "i_owe" ? "Record a payment" : "Record received"}
+            </button>
+            <button className="btn !bg-card2 !text-label" onClick={() => setFundOpen(true)}>
+              Set aside
+            </button>
+          </div>
+        </>
       )}
       <button className="btn btn-danger mt-2" onClick={async () => { await deleteObligation(o.id); onClose(); }}>
         <Icon name="trash" size={17} /> Delete
       </button>
       {payOpen && <PaySheet o={o} max={rem} currency={currency} onClose={() => setPayOpen(false)} />}
+      {fundOpen && <ReserveSheet o={o} pool={pool} currency={currency} onClose={() => setFundOpen(false)} />}
     </Sheet>
   );
 }
@@ -272,7 +366,14 @@ function PaySheet({ o, max, currency, onClose }: { o: Obligation; max: number; c
         <span className="text-[20px] font-semibold text-sub mb-1.5">Rs</span>
         <input className="bg-transparent outline-none text-[44px] font-bold w-[200px] text-center tabular-nums placeholder:text-card3" placeholder="0" inputMode="decimal" autoFocus value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))} />
       </div>
-      <button className="pill bg-card2 text-sub mx-auto mb-5" onClick={() => setAmount(String(max))}>Full: {formatMoney(max, currency)}</button>
+      <div className="flex gap-2 justify-center mb-5">
+        {o.reserved_amount > 0 && (
+          <button className="pill bg-[rgba(94,229,200,0.15)] text-teal" onClick={() => setAmount(String(Math.min(max, o.reserved_amount)))}>
+            Reserved: {formatMoney(Math.min(max, o.reserved_amount), currency)}
+          </button>
+        )}
+        <button className="pill bg-card2 text-sub" onClick={() => setAmount(String(max))}>Full: {formatMoney(max, currency)}</button>
+      </div>
       <button className="btn" disabled={parsed <= 0 || parsed > max} onClick={async () => { await payObligation(o, parsed); onClose(); }}>
         Record {parsed > 0 ? formatMoney(parsed, currency) : ""}
       </button>
@@ -281,44 +382,48 @@ function PaySheet({ o, max, currency, onClose }: { o: Obligation; max: number; c
   );
 }
 
+function ReserveSheet({ o, pool, currency, onClose }: { o: Obligation; pool: ReturnType<typeof useSavingsPool>; currency: string; onClose: () => void }) {
+  const [amount, setAmount] = useState("");
+  const parsed = parseFloat(amount.replace(/,/g, "")) || 0;
+  const rem = o.total_amount - o.settled_amount - o.reserved_amount;
+  const max = Math.min(rem, pool.free);
+  return (
+    <Sheet title="Set aside" onClose={onClose}>
+      <p className="text-sub text-[14px] text-center mt-1">
+        Free pool: {formatMoney(pool.free, currency)} · still needed: {formatMoney(rem, currency)}
+      </p>
+      <div className="flex items-end justify-center gap-1 py-6">
+        <span className="text-[20px] font-semibold text-sub mb-1.5">Rs</span>
+        <input className="bg-transparent outline-none text-[44px] font-bold w-[200px] text-center tabular-nums placeholder:text-card3" placeholder="0" inputMode="decimal" autoFocus value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))} />
+      </div>
+      <button className="pill bg-card2 text-sub mx-auto mb-5" onClick={() => setAmount(String(max))}>All I can: {formatMoney(max, currency)}</button>
+      <button className="btn" disabled={parsed <= 0 || parsed > max} onClick={async () => { await reserveForObligation(o, parsed); onClose(); }}>
+        Set aside {parsed > 0 ? formatMoney(parsed, currency) : ""}
+      </button>
+      <p className="text-sub2 text-[12px] text-center mt-3">Earmarks pool money — record a payment when you hand it over</p>
+    </Sheet>
+  );
+}
+
 // ---------- goals ----------
 
-function GoalsView({ goals, uid, currency, savingsPercent, onSelect }: {
-  goals: SavingsGoal[]; uid: string; currency: string; savingsPercent: number; onSelect: (g: SavingsGoal) => void;
+function GoalsView({ goals, currency, onSelect }: {
+  goals: SavingsGoal[]; currency: string; onSelect: (g: SavingsGoal) => void;
 }) {
-  const income = useIncome(uid);
-  const wk = weekKey(new Date());
-  const weekPay = income.filter((i) => i.week_start === wk).reduce((s, i) => s + i.amount, 0);
-  const pool = (weekPay * savingsPercent) / 100;
-  const allocated = goals.filter((g) => g.status === "active").reduce((s, g) => s + g.allocation_percent, 0);
-
-  const needs = goals.filter((g) => g.kind === "need");
-  const wants = goals.filter((g) => g.kind === "want");
+  const sorted = [...goals].sort((a, b) => PRIO_ORDER[a.priority] - PRIO_ORDER[b.priority] || (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+  const needs = sorted.filter((g) => g.kind === "need");
+  const wants = sorted.filter((g) => g.kind === "want");
 
   return (
     <>
-      <Card className="card-pad mb-6">
-        <div className="flex justify-between items-baseline mb-1">
-          <span className="text-[13px] text-sub">This week&apos;s set-aside</span>
-          <span className="text-[18px] font-bold tabular-nums text-teal">{formatMoney(pool, currency)}</span>
-        </div>
-        <div className="flex justify-between items-baseline">
-          <span className="text-[13px] text-sub">Allocated to goals</span>
-          <span className={`text-[14px] font-semibold tabular-nums ${allocated > 100 ? "text-red" : ""}`}>{allocated}%</span>
-        </div>
-        {allocated > 100 && <p className="text-red text-[12px] mt-1">Over-allocated — lower some goals</p>}
-        {pool === 0 && <p className="text-sub2 text-[12px] mt-1">Log this week&apos;s pay to see goal funding</p>}
-      </Card>
-
       {(["need", "want"] as const).map((k) => (
         <div key={k} className="mb-5">
           <SectionTitle>{k === "need" ? "Needs" : "Wants"}</SectionTitle>
           <Card>
-            {needs.length + wants.length === 0 && k === "need" ? (
+            {goals.length === 0 && k === "need" && (
               <EmptyState icon="target" title="No goals yet" hint="Needs: rent, emergency fund. Wants: phone, trip, PS5" />
-            ) : null}
+            )}
             {(k === "need" ? needs : wants).map((g) => {
-              const weekly = (pool * g.allocation_percent) / 100;
               const pct = g.target_amount ? Math.min(100, (g.saved_amount / g.target_amount) * 100) : 0;
               return (
                 <div key={g.id} className="list-row !flex-col !items-stretch gap-2 cursor-pointer active:bg-card2" onClick={() => onSelect(g)}>
@@ -327,8 +432,13 @@ function GoalsView({ goals, uid, currency, savingsPercent, onSelect }: {
                       <Icon name={k === "need" ? "check" : "heart"} size={16} className={k === "need" ? "text-green" : "text-purple"} />
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[16px] font-medium truncate">{g.title}</div>
-                      <div className="text-[13px] text-sub">{g.status === "done" ? "Funded" : `${g.allocation_percent}% of set-aside${weekly > 0 ? ` ≈ ${formatMoney(weekly, currency)}/wk` : ""}`}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[16px] font-medium truncate">{g.title}</span>
+                        {g.priority !== "normal" && <span className={`pill !py-0.5 !px-2 !text-[10px] ${PRIO_STYLE[g.priority]}`}>{g.priority === "high" ? "Top" : "Low"}</span>}
+                      </div>
+                      <div className="text-[13px] text-sub">
+                        {g.status === "done" ? "Funded" : g.weekly_amount > 0 ? `${formatMoney(g.weekly_amount, currency)}/wk plan` : "No weekly plan"}
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-[15px] font-semibold tabular-nums">{formatMoney(g.saved_amount, currency)}</p>
@@ -341,7 +451,7 @@ function GoalsView({ goals, uid, currency, savingsPercent, onSelect }: {
                 </div>
               );
             })}
-            {(k === "need" ? needs : wants).length === 0 && needs.length + wants.length > 0 && (
+            {(k === "need" ? needs : wants).length === 0 && goals.length > 0 && (
               <p className="card-pad text-sub2 text-[13px] text-center py-4">Nothing here</p>
             )}
           </Card>
@@ -351,15 +461,26 @@ function GoalsView({ goals, uid, currency, savingsPercent, onSelect }: {
   );
 }
 
-function AddGoalSheet({ uid, goals, onClose }: { uid: string; goals: SavingsGoal[]; onClose: () => void }) {
+function PriorityPicker({ value, onChange }: { value: Priority; onChange: (p: Priority) => void }) {
+  return (
+    <div className="flex gap-2">
+      {(["high", "normal", "low"] as const).map((p) => (
+        <button key={p} className={`pill ${value === p ? "bg-tint text-white" : "bg-card2 text-sub"}`} onClick={() => onChange(p)}>
+          {p === "high" ? "Top priority" : p === "normal" ? "Normal" : "Low"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AddGoalSheet({ uid, onClose }: { uid: string; onClose: () => void }) {
   const [kind, setKind] = useState<GoalKind>("need");
   const [title, setTitle] = useState("");
   const [target, setTarget] = useState("");
-  const [alloc, setAlloc] = useState("20");
+  const [weekly, setWeekly] = useState("");
+  const [priority, setPriority] = useState<Priority>("normal");
   const [saving, setSaving] = useState(false);
   const parsed = parseFloat(target.replace(/,/g, ""));
-  const allocated = goals.filter((g) => g.status === "active").reduce((s, g) => s + g.allocation_percent, 0);
-  const free = Math.max(0, 100 - allocated);
 
   return (
     <Sheet title="New goal" onClose={onClose}>
@@ -373,24 +494,27 @@ function AddGoalSheet({ uid, goals, onClose }: { uid: string; goals: SavingsGoal
       />
       <label className="section-title mt-5">Goal</label>
       <input className="input mb-3" placeholder={kind === "need" ? "e.g. Rent deposit, emergency fund" : "e.g. New phone, trip to Hunza"} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-3">
         <span className="text-sub text-[15px] font-medium">Rs</span>
         <input className="input" placeholder="Target amount" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value.replace(/[^\d.,]/g, ""))} />
       </div>
-      <label className="section-title">Weekly allocation — % of set-aside</label>
-      <div className="flex gap-2 mb-2">
-        {[10, 20, 30, 50].map((p) => (
-          <button key={p} className={`pill ${parseFloat(alloc) === p ? "bg-tint text-white" : "bg-card2 text-sub"}`} onClick={() => setAlloc(String(p))}>{p}%</button>
-        ))}
-        <input className="input !py-1 text-center tabular-nums" style={{ width: 80 }} inputMode="decimal" value={alloc} onChange={(e) => setAlloc(e.target.value.replace(/[^\d.]/g, ""))} />
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-sub text-[15px] font-medium">Rs</span>
+        <input className="input" placeholder="Weekly amount — e.g. 3,000" inputMode="decimal" value={weekly} onChange={(e) => setWeekly(e.target.value.replace(/[^\d.,]/g, ""))} />
       </div>
-      <p className="text-sub2 text-[12px] px-1 mb-6">{free}% of set-aside currently unallocated</p>
+      <label className="section-title">Priority</label>
+      <PriorityPicker value={priority} onChange={setPriority} />
+      <div className="h-6" />
       <button
         className="btn"
-        disabled={!title.trim() || !parsed || !(parseFloat(alloc) > 0) || saving}
+        disabled={!title.trim() || !parsed || saving}
         onClick={async () => {
           setSaving(true);
-          await addGoal({ user_id: uid, kind, title, target_amount: parsed, allocation_percent: Math.min(100, parseFloat(alloc) || 0) });
+          await addGoal({
+            user_id: uid, kind, title, target_amount: parsed,
+            weekly_amount: parseFloat(weekly.replace(/,/g, "")) || 0,
+            priority,
+          });
           onClose();
         }}
       >
@@ -400,12 +524,13 @@ function AddGoalSheet({ uid, goals, onClose }: { uid: string; goals: SavingsGoal
   );
 }
 
-function GoalDetail({ g, currency, onClose }: { g: SavingsGoal; currency: string; onClose: () => void }) {
+function GoalDetail({ g, pool, currency, onClose }: { g: SavingsGoal; pool: ReturnType<typeof useSavingsPool>; currency: string; onClose: () => void }) {
   const [fundOpen, setFundOpen] = useState(false);
   const [fund, setFund] = useState("");
-  const [alloc, setAlloc] = useState(String(g.allocation_percent));
+  const [weekly, setWeekly] = useState(String(g.weekly_amount || ""));
   const pct = Math.min(100, (g.saved_amount / g.target_amount) * 100);
   const rem = Math.max(0, g.target_amount - g.saved_amount);
+  const fundParsed = Math.min(rem, parseFloat(fund.replace(/,/g, "")) || 0);
 
   return (
     <Sheet title={g.title} onClose={onClose}>
@@ -416,26 +541,35 @@ function GoalDetail({ g, currency, onClose }: { g: SavingsGoal; currency: string
           <div className="progress-fill" style={{ width: `${pct}%`, background: g.kind === "need" ? "var(--color-green)" : "var(--color-purple)" }} />
         </div>
         <span className={`pill mt-3 ${g.status === "done" ? "bg-[rgba(48,209,88,0.15)] text-green" : "bg-card2 text-sub"}`}>
-          {g.status === "done" ? "Funded" : `${g.allocation_percent}% of weekly set-aside`}
+          {g.status === "done" ? "Funded" : g.weekly_amount > 0 ? `${formatMoney(g.weekly_amount, currency)}/wk plan` : "No weekly plan"}
         </span>
       </div>
 
-      {!fundOpen ? (
+      <label className="section-title">Priority</label>
+      <PriorityPicker value={g.priority} onChange={(p) => void updateGoal(g, { priority: p })} />
+      <div className="h-4" />
+      <label className="section-title">Weekly amount</label>
+      <div className="flex items-center gap-2 mb-4">
+        <input className="input" inputMode="decimal" placeholder="e.g. 3,000" value={weekly} onChange={(e) => setWeekly(e.target.value.replace(/[^\d.,]/g, ""))} />
+        <button
+          className="btn !w-auto px-5"
+          disabled={String(g.weekly_amount || "") === weekly}
+          onClick={() => void updateGoal(g, { weekly_amount: parseFloat(weekly.replace(/,/g, "")) || 0 })}
+        >
+          /wk
+        </button>
+      </div>
+
+      {g.status === "active" && !fundOpen && <button className="btn" onClick={() => setFundOpen(true)}>Move from pool</button>}
+      {fundOpen && (
         <>
-          <div className="flex items-center gap-2 mb-3">
-            <input className="input" inputMode="decimal" value={alloc} onChange={(e) => setAlloc(e.target.value.replace(/[^\d.]/g, ""))} />
-            <button className="btn !w-auto px-5" disabled={parseFloat(alloc) === g.allocation_percent} onClick={async () => { await updateGoal(g, { allocation_percent: Math.min(100, parseFloat(alloc) || 0) }); }}>%</button>
-          </div>
-          {g.status === "active" && <button className="btn" onClick={() => setFundOpen(true)}>Add funds</button>}
-        </>
-      ) : (
-        <>
+          <p className="text-sub text-[13px] text-center mb-2">Free pool: {formatMoney(pool.free, currency)}</p>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-sub">Rs</span>
-            <input className="input" placeholder={`up to ${formatMoney(rem, currency)}`} inputMode="decimal" autoFocus value={fund} onChange={(e) => setFund(e.target.value.replace(/[^\d.,]/g, ""))} />
+            <input className="input" placeholder={`up to ${formatMoney(Math.min(rem, pool.free), currency)}`} inputMode="decimal" autoFocus value={fund} onChange={(e) => setFund(e.target.value.replace(/[^\d.,]/g, ""))} />
           </div>
-          <button className="btn" disabled={!(parseFloat(fund) > 0)} onClick={async () => { await contributeToGoal(g, Math.min(rem, parseFloat(fund.replace(/,/g, "")) || 0)); setFundOpen(false); }}>
-            Add {formatMoney(Math.min(rem, parseFloat(fund.replace(/,/g, "")) || 0), currency)}
+          <button className="btn" disabled={!(fundParsed > 0) || fundParsed > pool.free} onClick={async () => { await contributeToGoal(g, fundParsed); setFundOpen(false); }}>
+            Move {formatMoney(fundParsed, currency)}
           </button>
         </>
       )}

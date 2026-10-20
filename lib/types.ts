@@ -102,6 +102,7 @@ export interface ActivitySplit {
 
 export type ObligationDirection = "i_owe" | "owed_to_me";
 export type GoalKind = "need" | "want";
+export type Priority = "high" | "normal" | "low";
 
 export interface Obligation {
   id: string;
@@ -112,6 +113,8 @@ export interface Obligation {
   title: string;
   total_amount: number;
   settled_amount: number;
+  reserved_amount: number; // set-aside money earmarked for this debt
+  weekly_amount: number;   // planned weekly pay-down
   status: "open" | "settled";
   due_date: string | null;
   created_at?: string;
@@ -124,7 +127,8 @@ export interface SavingsGoal {
   title: string;
   target_amount: number;
   saved_amount: number;
-  allocation_percent: number;
+  weekly_amount: number;   // planned weekly contribution
+  priority: Priority;
   status: "active" | "done";
   created_at?: string;
 }

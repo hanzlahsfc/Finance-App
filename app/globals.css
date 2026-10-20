@@ -290,6 +290,7 @@ body {
   border-radius: 3px;
   background: var(--color-card3);
   overflow: hidden;
+  position: relative;
 }
 .progress-fill {
   height: 100%;

@@ -12,7 +12,6 @@ const TABS = [
   { href: "/transactions", label: "Activity", icon: "list" as const },
   { href: "/obligations", label: "Obligations", icon: "coins" as const },
   { href: "/groups", label: "Friends", icon: "people" as const },
-  { href: "/reports", label: "Reports", icon: "chart" as const },
 ];
 
 const HIDE_ON = ["/login", "/onboarding", "/auth/callback"];
