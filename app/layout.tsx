@@ -41,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("hisab-theme")||"dark";var d=t==="dark"||(t==="auto"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.dataset.theme=d?"dark":"light";}catch(e){document.documentElement.dataset.theme="dark";}})()`,
+            __html: `(function(){try{var t=localStorage.getItem("hisab-theme")||"dark";var d=t==="dark"||(t==="auto"&&matchMedia("(prefers-color-scheme: dark)").matches);var el=document.documentElement;el.dataset.theme=d?"dark":"light";el.style.background=d?"#000000":"#f2f2f7";}catch(e){document.documentElement.dataset.theme="dark";document.documentElement.style.background="#000000";}})()`,
           }}
         />
         <AppProvider>
