@@ -2,6 +2,7 @@
 
 import { db, type OutboxItem } from "./db";
 import { supabase } from "./supabase";
+import { prefetchPlans } from "./plans";
 
 // Tables we mirror locally for offline reads.
 const MIRROR_TABLES = [
@@ -273,6 +274,7 @@ export async function pullAll(): Promise<void> {
 
     status = "synced";
     emit();
+    void prefetchPlans();
   } catch {
     status = navigator.onLine ? "error" : "offline";
     emit();

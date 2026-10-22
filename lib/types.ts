@@ -135,6 +135,13 @@ export interface SavingsGoal {
   created_at?: string;
 }
 
+export interface PlanFile {
+  id: string; // plan id
+  url: string;
+  text: string;
+  fetched_at: number;
+}
+
 export interface Plan {
   id: string;
   user_id: string;

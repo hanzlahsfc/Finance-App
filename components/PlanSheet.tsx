@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "./Icon";
+import { loadPlanHtml } from "@/lib/plans";
 import type { Plan } from "@/lib/types";
 
 export function PlanSheet({ plan, onClose }: { plan: Plan; onClose: () => void }) {
@@ -10,11 +11,7 @@ export function PlanSheet({ plan, onClose }: { plan: Plan; onClose: () => void }
 
   useEffect(() => {
     let dead = false;
-    fetch(plan.url)
-      .then((r) => {
-        if (!r.ok) throw new Error(String(r.status));
-        return r.text();
-      })
+    loadPlanHtml(plan)
       .then((t) => {
         if (!dead) setHtml(t);
       })
@@ -26,7 +23,7 @@ export function PlanSheet({ plan, onClose }: { plan: Plan; onClose: () => void }
       dead = true;
       document.body.style.overflow = "";
     };
-  }, [plan.url]);
+  }, [plan]);
 
   return (
     <div className="plan-overlay">

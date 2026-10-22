@@ -14,6 +14,7 @@ import type {
   Obligation,
   SavingsGoal,
   Plan,
+  PlanFile,
 } from "./types";
 
 export interface OutboxItem {
@@ -42,6 +43,7 @@ class HisabDB extends Dexie {
   obligations!: Table<Obligation, string>;
   savings_goals!: Table<SavingsGoal, string>;
   plans!: Table<Plan, string>;
+  plan_files!: Table<PlanFile, string>;
   outbox!: Table<OutboxItem, number>;
   meta!: Table<{ key: string; value: string }, string>;
 
@@ -64,6 +66,9 @@ class HisabDB extends Dexie {
       plans: "id, user_id, kind",
       outbox: "++seq, table",
       meta: "key",
+    });
+    this.version(4).stores({
+      plan_files: "id",
     });
   }
 }
