@@ -69,45 +69,9 @@ export default function GroupsPage() {
         </>
       )}
 
-      {/* groups */}
-      <div className="flex items-center justify-between px-1 mb-2">
-        <span className="section-title !mb-0">Groups</span>
-        <button className="text-tint text-[14px] font-medium flex items-center gap-1" onClick={() => setNewGroupOpen(true)}>
-          <Icon name="plus" size={15} /> New group
-        </button>
-      </div>
-      <Card className="mb-6">
-        {groups.filter((g) => !g.is_adhoc).length === 0 ? (
-          <EmptyState icon="people" title="No groups yet" hint="Create a group for trips, dinners and shared expenses" />
-        ) : (
-          groups.filter((g) => !g.is_adhoc).map((g) => (
-            <Link href={`/groups/${g.id}`} key={g.id}>
-              <ListRow
-                icon="people"
-                iconBg="rgba(0,200,83,0.15)"
-                title={g.name}
-                subtitle="Tap to view activity"
-              />
-            </Link>
-          ))
-        )}
-      </Card>
-
-      {/* ad-hoc splits from QuickAdd */}
-      {groups.some((g) => g.is_adhoc) && (
-        <>
-          <SectionTitle>Shared splits</SectionTitle>
-          <Card className="mb-6">
-            {groups.filter((g) => g.is_adhoc).map((g) => (
-              <AdhocSplitRow key={g.id} group={g} uid={uid!} profileMap={profileMap} currency={currency} />
-            ))}
-          </Card>
-        </>
-      )}
-
       {/* friends list */}
       <SectionTitle>Friends</SectionTitle>
-      <Card className="mb-4">
+      <Card className="mb-6">
         {friends.length === 0 && outgoing.length === 0 ? (
           <EmptyState icon="userPlus" title="No friends yet" hint="Search by username to add people you split expenses with" />
         ) : (
@@ -155,6 +119,40 @@ export default function GroupsPage() {
           </>
         )}
       </Card>
+
+      {/* ad-hoc splits from QuickAdd */}
+      {groups.some((g) => g.is_adhoc) && (
+        <>
+          <SectionTitle>Shared splits</SectionTitle>
+          <Card className="mb-6">
+            {groups.filter((g) => g.is_adhoc).map((g) => (
+              <AdhocSplitRow key={g.id} group={g} uid={uid!} profileMap={profileMap} currency={currency} />
+            ))}
+          </Card>
+        </>
+      )}
+
+      {/* groups — secondary, most splits happen via + */}
+      <div className="flex items-center justify-between px-1 mb-2">
+        <span className="section-title !mb-0">Groups</span>
+        <button className="text-sub text-[14px] font-medium flex items-center gap-1" onClick={() => setNewGroupOpen(true)}>
+          <Icon name="plus" size={15} /> New group
+        </button>
+      </div>
+      {groups.filter((g) => !g.is_adhoc).length > 0 && (
+        <Card className="mb-4">
+          {groups.filter((g) => !g.is_adhoc).map((g) => (
+            <Link href={`/groups/${g.id}`} key={g.id}>
+              <ListRow
+                icon="people"
+                iconBg="rgba(0,200,83,0.15)"
+                title={g.name}
+                subtitle="Tap to view activity"
+              />
+            </Link>
+          ))}
+        </Card>
+      )}
 
       {addFriendOpen && <AddFriendSheet uid={uid!} existing={friendships} onClose={() => setAddFriendOpen(false)} />}
       {newGroupOpen && <NewGroupSheet uid={uid!} friends={friends} profileMap={profileMap} onClose={() => setNewGroupOpen(false)} />}
