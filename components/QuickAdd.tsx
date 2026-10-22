@@ -308,7 +308,7 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
                     Your share{payer !== "me" ? ` (owed to ${nameOf(payer).split(" ")[0]})` : ""}
                   </span>
                   <span className={`text-[15px] font-bold tabular-nums ${myShare < 0 ? "text-red" : "text-green"}`}>
-                    {formatMoney(myShare, currency)}
+                    {formatMoney(myShare, currency, true)}
                   </span>
                 </div>
               )}
@@ -352,7 +352,7 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
 
       {error && <p className="text-red text-[13px] text-center mb-2">{error}</p>}
       <button className="btn" disabled={!valid || saving} onClick={save}>
-        {saving ? "Saving…" : splitOn ? `Save split · your share ${formatMoney(myShare, currency)}` : kind === "set_aside" ? "Set aside" : "Save"}
+        {saving ? "Saving…" : splitOn ? `Save split · your share ${formatMoney(myShare, currency, true)}` : kind === "set_aside" ? "Set aside" : "Save"}
       </button>
     </Sheet>
   );

@@ -13,13 +13,14 @@ import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
 import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
 import { usePlans } from "@/lib/hooks";
+import { toggleAmountsHidden } from "@/lib/privacy";
 import { PlanSheet } from "@/components/PlanSheet";
 import type { Plan } from "@/lib/types";
 
 const CURRENCIES = ["PKR", "USD", "EUR", "GBP", "AED", "INR"];
 
 export default function SettingsPage() {
-  const { session, profile } = useApp();
+  const { session, profile, amountsHidden } = useApp();
   const sync = useSyncState();
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
@@ -92,6 +93,22 @@ export default function SettingsPage() {
         <ListRow
           title="Set aside from pay"
           right={<span className="text-[15px] font-semibold">{profile?.savings_percent ?? 20}%</span>}
+        />
+        <ListRow
+          title="Hide amounts"
+          subtitle="Mask all figures with •••"
+          right={
+            <button
+              aria-label="Toggle amount privacy"
+              className={`w-[52px] h-[31px] rounded-full p-[3px] transition-colors ${amountsHidden ? "bg-green" : "bg-card3"}`}
+              onClick={toggleAmountsHidden}
+            >
+              <span
+                className="block w-[25px] h-[25px] rounded-full bg-white shadow transition-transform"
+                style={{ transform: amountsHidden ? "translateX(21px)" : "translateX(0)" }}
+              />
+            </button>
+          }
         />
         <ListRow
           title="Show email to friends"

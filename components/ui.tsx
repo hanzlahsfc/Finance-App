@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 import { cn, initials, formatMoney } from "@/lib/utils";
 import { Icon, ICON_NAMES, type IconName } from "./Icon";
+import { useApp } from "@/lib/store";
+import { toggleAmountsHidden } from "@/lib/privacy";
 
 export function SectionTitle({ children }: { children: ReactNode }) {
   return <h3 className="section-title">{children}</h3>;
@@ -116,6 +118,19 @@ export function EmptyState({ icon, title, hint }: { icon: IconName; title: strin
       <p className="text-[17px] font-semibold">{title}</p>
       {hint && <p className="text-[14px] text-sub mt-1">{hint}</p>}
     </div>
+  );
+}
+
+export function EyeToggle({ className }: { className?: string }) {
+  const { amountsHidden } = useApp();
+  return (
+    <button
+      onClick={toggleAmountsHidden}
+      aria-label={amountsHidden ? "Show amounts" : "Hide amounts"}
+      className={cn("p-1 text-sub2", className)}
+    >
+      <Icon name={amountsHidden ? "eyeOff" : "eye"} size={18} />
+    </button>
   );
 }
 

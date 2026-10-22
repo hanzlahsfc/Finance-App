@@ -2,12 +2,16 @@ export function uuid(): string {
   return crypto.randomUUID();
 }
 
-export function formatMoney(amount: number, currency = "PKR"): string {
+import { isAmountsHidden } from "./privacy";
+
+export function formatMoney(amount: number, currency = "PKR", raw = false): string {
   const n = Math.abs(amount);
   const formatted = new Intl.NumberFormat("en-PK", {
     maximumFractionDigits: n % 1 === 0 ? 0 : 2,
   }).format(n);
-  return `${currency === "PKR" ? "Rs" : currency} ${formatted}`;
+  const s = `${currency === "PKR" ? "Rs" : currency} ${formatted}`;
+  if (!raw && isAmountsHidden()) return s.replace(/[\d.,]+/g, "•••");
+  return s;
 }
 
 export function cn(...parts: (string | false | null | undefined)[]): string {

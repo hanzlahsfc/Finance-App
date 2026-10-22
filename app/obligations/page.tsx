@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useApp } from "@/lib/store";
 import { useObligations, useGoals, useOwedToMe, useFriendships, useProfileMap, useSavingsPool } from "@/lib/hooks";
 import { formatMoney, formatDate } from "@/lib/utils";
-import { Card, SectionTitle, ListRow, Segmented, EmptyState } from "@/components/ui";
+import { Card, SectionTitle, ListRow, Segmented, EmptyState, EyeToggle } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
 import {
@@ -152,7 +152,10 @@ function PoolCard({ pool, currency }: { pool: ReturnType<typeof useSavingsPool>;
     <Card className="card-pad">
       <div className="flex justify-between items-baseline mb-1">
         <span className="text-[13px] font-semibold text-sub uppercase tracking-wide">Savings pool</span>
-        <span className="text-[20px] font-bold tabular-nums text-teal">{formatMoney(pool.free, currency)}</span>
+        <div className="flex items-center gap-1">
+          <EyeToggle />
+          <span className="text-[20px] font-bold tabular-nums text-teal">{formatMoney(pool.free, currency)}</span>
+        </div>
       </div>
       <div className="flex justify-between items-baseline text-[13px] text-sub">
         <span>Set aside so far</span>

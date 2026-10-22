@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useApp, useSyncState } from "@/lib/store";
 import { useTransactions, useWeekTransactions, useIncome, useBills, useBillPayments, billPaidThisPeriod, useGroups, useOwedToMe, todaySpend } from "@/lib/hooks";
 import { formatMoney, weekKey, formatDayLabel } from "@/lib/utils";
-import { Card, SectionTitle, ListRow, Avatar, EmptyState } from "@/components/ui";
+import { Card, SectionTitle, ListRow, Avatar, EmptyState, EyeToggle } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { categoryById } from "@/lib/categories";
 
@@ -57,9 +57,12 @@ export default function Home() {
       <Card className="card-pad mb-6">
         <div className="flex items-center justify-between mb-1">
           <span className="section-title !mb-0">This week</span>
-          <Link href="/money" className="text-tint text-[14px] font-medium flex items-center gap-0.5">
-            Pay & bills <Icon name="chevronRight" size={14} />
-          </Link>
+          <div className="flex items-center gap-1">
+            <EyeToggle />
+            <Link href="/money" className="text-tint text-[14px] font-medium flex items-center gap-0.5">
+              Pay & bills <Icon name="chevronRight" size={14} />
+            </Link>
+          </div>
         </div>
         <div className="amount-hero mt-2" style={{ color: left >= 0 ? "var(--color-label)" : "var(--color-red)" }}>
           {formatMoney(Math.max(0, left), currency)}

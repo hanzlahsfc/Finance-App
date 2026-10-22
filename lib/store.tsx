@@ -12,6 +12,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, hasSupabaseEnv } from "./supabase";
+import { subscribePrivacy, getPrivacySnapshot, isAmountsHidden } from "./privacy";
 import { initSync, teardownSync, subscribeSync, getSyncState } from "./sync";
 import { updateProfile } from "./actions";
 import { ensureDemoData, DEMO_SESSION } from "./demo";
@@ -22,9 +23,10 @@ interface AppState {
   session: Session | null;
   profile: Profile | null | undefined; // undefined = still loading
   ready: boolean;
+  amountsHidden: boolean;
 }
 
-const AppCtx = createContext<AppState>({ session: null, profile: undefined, ready: false });
+const AppCtx = createContext<AppState>({ session: null, profile: undefined, ready: false, amountsHidden: false });
 
 export function useApp() {
   return useContext(AppCtx);
@@ -39,6 +41,7 @@ const PUBLIC_PATHS = ["/login", "/auth/callback"];
 export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  const amountsHidden = useSyncExternalStore(subscribePrivacy, getPrivacySnapshot, () => false);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -118,5 +121,5 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [ready, session, profile, pathname, router]);
 
-  return <AppCtx.Provider value={{ session, profile, ready }}>{children}</AppCtx.Provider>;
+  return <AppCtx.Provider value={{ session, profile, ready, amountsHidden }}>{children}</AppCtx.Provider>;
 }
