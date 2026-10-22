@@ -12,7 +12,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, hasSupabaseEnv } from "./supabase";
-import { subscribePrivacy, getPrivacySnapshot, isAmountsHidden } from "./privacy";
+import { subscribePrivacy, getPrivacySnapshot } from "./privacy";
 import { initSync, teardownSync, subscribeSync, getSyncState } from "./sync";
 import { updateProfile } from "./actions";
 import { ensureDemoData, DEMO_SESSION } from "./demo";
