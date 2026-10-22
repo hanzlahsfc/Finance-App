@@ -189,7 +189,7 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
       {kind === "expense" && (
         <div className="mb-4">
           <button
-            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-[14px] text-[15px] font-medium ${splitOn ? "bg-[rgba(10,132,255,0.15)] text-tint" : "bg-card2 text-label"}`}
+            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-[14px] text-[15px] font-medium ${splitOn ? "bg-[rgba(0,200,83,0.15)] text-tint" : "bg-card2 text-label"}`}
             onClick={() => setSplitOn(!splitOn)}
           >
             <span className="flex items-center gap-2"><Icon name="people" size={18} /> Split with friends</span>

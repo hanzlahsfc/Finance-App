@@ -84,7 +84,7 @@ export default function GroupsPage() {
             <Link href={`/groups/${g.id}`} key={g.id}>
               <ListRow
                 icon="people"
-                iconBg="rgba(10,132,255,0.15)"
+                iconBg="rgba(0,200,83,0.15)"
                 title={g.name}
                 subtitle="Tap to view activity"
               />
