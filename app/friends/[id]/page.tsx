@@ -5,13 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useApp } from "@/lib/store";
-import { useFriendships, useProfileMap } from "@/lib/hooks";
+import { useFriendships, useProfileMap, usePlans } from "@/lib/hooks";
 import { db } from "@/lib/db";
 import { removeFriendship } from "@/lib/actions";
 import { formatMoney, formatDayLabel } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState } from "@/components/ui";
+import { PlanSheet } from "@/components/PlanSheet";
 import { Icon } from "@/components/Icon";
-import type { Activity } from "@/lib/types";
+import type { Activity, Plan } from "@/lib/types";
 
 interface SharedEvent {
   activity: Activity;
@@ -37,6 +38,8 @@ export default function FriendPage() {
   );
 
   const [confirming, setConfirming] = useState(false);
+  const plans = usePlans(friendId);
+  const [openPlan, setOpenPlan] = useState<Plan | null>(null);
 
   const events = useLiveQuery(
     async (): Promise<SharedEvent[]> => {
@@ -100,6 +103,25 @@ export default function FriendPage() {
         </div>
       </Card>
 
+      {/* plans */}
+      {plans.length > 0 && (
+        <>
+          <SectionTitle>Plans</SectionTitle>
+          <Card className="mb-6">
+            {plans.map((pl) => (
+              <ListRow
+                key={pl.id}
+                icon={pl.kind === "diet" ? "apple" : "dumbbell"}
+                iconBg="rgba(0,200,83,0.15)"
+                title={pl.title}
+                subtitle="Tap to open"
+                onClick={() => setOpenPlan(pl)}
+              />
+            ))}
+          </Card>
+        </>
+      )}
+
       {/* shared events */}
       <SectionTitle>Events together</SectionTitle>
       <Card className="mb-6">
@@ -128,6 +150,8 @@ export default function FriendPage() {
         )}
       </Card>
 
+      {openPlan && <PlanSheet plan={openPlan} onClose={() => setOpenPlan(null)} />}
+
       {/* unfriend */}
       {friendship && (
         confirming ? (
@@ -155,3 +179,5 @@ export default function FriendPage() {
     </div>
   );
 }
+
+

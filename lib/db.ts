@@ -13,6 +13,7 @@ import type {
   Settlement,
   Obligation,
   SavingsGoal,
+  Plan,
 } from "./types";
 
 export interface OutboxItem {
@@ -40,12 +41,13 @@ class HisabDB extends Dexie {
   settlements!: Table<Settlement, string>;
   obligations!: Table<Obligation, string>;
   savings_goals!: Table<SavingsGoal, string>;
+  plans!: Table<Plan, string>;
   outbox!: Table<OutboxItem, number>;
   meta!: Table<{ key: string; value: string }, string>;
 
   constructor() {
     super("hisab");
-    this.version(2).stores({
+    this.version(3).stores({
       profiles: "id, username",
       friendships: "id, user_id, friend_id, status",
       income_entries: "id, user_id, week_start",
@@ -59,6 +61,7 @@ class HisabDB extends Dexie {
       settlements: "id, group_id, activity_id",
       obligations: "id, user_id, direction, status",
       savings_goals: "id, user_id, kind, status",
+      plans: "id, user_id, kind",
       outbox: "++seq, table",
       meta: "key",
     });

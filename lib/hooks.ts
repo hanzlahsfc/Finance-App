@@ -3,7 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "./db";
 import { startOfWeek, endOfWeek, toISODate, billPeriodStart } from "./utils";
-import type { Profile, Transaction, Bill, BillPayment, Obligation, SavingsGoal } from "./types";
+import type { Profile, Transaction, Bill, BillPayment, Obligation, SavingsGoal, Plan } from "./types";
 
 export function useTransactions(userId?: string) {
   return useLiveQuery(
@@ -148,6 +148,14 @@ export function useGoals(userId?: string) {
     },
     [userId],
     [] as SavingsGoal[]
+  );
+}
+
+export function usePlans(userId?: string) {
+  return useLiveQuery(
+    async () => (userId ? db().plans.where("user_id").equals(userId).toArray() : []),
+    [userId],
+    [] as Plan[]
   );
 }
 

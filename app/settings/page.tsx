@@ -12,6 +12,9 @@ import { Card, SectionTitle, ListRow, Avatar, Segmented } from "@/components/ui"
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
 import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
+import { usePlans } from "@/lib/hooks";
+import { PlanSheet } from "@/components/PlanSheet";
+import type { Plan } from "@/lib/types";
 
 const CURRENCIES = ["PKR", "USD", "EUR", "GBP", "AED", "INR"];
 
@@ -25,6 +28,8 @@ export default function SettingsPage() {
   useEffect(() => setTheme(getThemePref()), []);
   const [backupMsg, setBackupMsg] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const myPlans = usePlans(session?.user.id);
+  const [openPlan, setOpenPlan] = useState<Plan | null>(null);
 
   if (!session) return null;
 
@@ -50,6 +55,24 @@ export default function SettingsPage() {
           onClick={() => setEditOpen(true)}
         />
       </Card>
+
+      {myPlans.length > 0 && (
+        <>
+          <SectionTitle>My plans</SectionTitle>
+          <Card className="mb-6">
+            {myPlans.map((pl) => (
+              <ListRow
+                key={pl.id}
+                icon={pl.kind === "diet" ? "apple" : "dumbbell"}
+                iconBg="rgba(0,200,83,0.15)"
+                title={pl.title}
+                subtitle="Tap to open"
+                onClick={() => setOpenPlan(pl)}
+              />
+            ))}
+          </Card>
+        </>
+      )}
 
       <SectionTitle>Preferences</SectionTitle>
       <Card className="mb-6">
@@ -198,6 +221,7 @@ export default function SettingsPage() {
       <p className="text-center text-sub2 text-[12px] mb-8">Hisab · made for friends</p>
 
       {editOpen && <EditProfileSheet onClose={() => setEditOpen(false)} />}
+      {openPlan && <PlanSheet plan={openPlan} onClose={() => setOpenPlan(null)} />}
     </div>
   );
 }

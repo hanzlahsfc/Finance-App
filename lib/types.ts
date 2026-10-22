@@ -135,6 +135,15 @@ export interface SavingsGoal {
   created_at?: string;
 }
 
+export interface Plan {
+  id: string;
+  user_id: string;
+  kind: string; // 'workout' | 'diet' | ...
+  title: string;
+  url: string;
+  created_at?: string;
+}
+
 export interface Settlement {
   id: string;
   activity_id: string | null;
