@@ -411,7 +411,6 @@ function ActivitySheet({
         <EditActivitySheet
           activity={activity}
           splits={splits}
-          uid={uid}
           profileMap={profileMap}
           nameOf={nameOf}
           onClose={() => setEditOpen(false)}
@@ -440,11 +439,10 @@ function ActivitySheet({
 }
 
 function EditActivitySheet({
-  activity, splits, uid, profileMap, nameOf, onClose,
+  activity, splits, profileMap, nameOf, onClose,
 }: {
   activity: Activity;
   splits: ActivitySplit[];
-  uid: string;
   profileMap: Map<string, { display_name: string; avatar_url?: string | null }>;
   nameOf: (id: string) => string;
   onClose: () => void;
