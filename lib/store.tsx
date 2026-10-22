@@ -13,6 +13,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, hasSupabaseEnv } from "./supabase";
 import { initSync, teardownSync, subscribeSync, getSyncState } from "./sync";
+import { updateProfile } from "./actions";
 import { ensureDemoData, DEMO_SESSION } from "./demo";
 import { db } from "./db";
 import type { Profile } from "./types";
@@ -92,6 +93,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  // Backfill email onto the profile (friends can see it unless hidden)
+  useEffect(() => {
+    if (session && liveProfile && session.user.email && liveProfile.email !== session.user.email) {
+      void updateProfile(session.user.id, { email: session.user.email });
+    }
+  }, [session, liveProfile]);
 
   // Route gating
   useEffect(() => {

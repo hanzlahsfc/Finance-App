@@ -2,22 +2,26 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useLiveQuery } from "dexie-react-hooks";
 import { useApp } from "@/lib/store";
-import { useFriendships, useGroups, useProfileMap } from "@/lib/hooks";
+import { useFriendships, useGroups, useProfileMap, useFriendStats } from "@/lib/hooks";
 import { db } from "@/lib/db";
 import { supabase, hasSupabaseEnv } from "@/lib/supabase";
 import { sendFriendRequest, acceptFriendRequest, removeFriendship, createGroup } from "@/lib/actions";
+import { formatMoney } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
-import type { Profile, Friendship } from "@/lib/types";
+import type { Profile, Friendship, Group } from "@/lib/types";
 
 export default function GroupsPage() {
-  const { session } = useApp();
+  const { session, profile } = useApp();
   const uid = session?.user.id;
+  const currency = profile?.currency ?? "PKR";
   const friendships = useFriendships(uid);
   const groups = useGroups(uid);
   const profileMap = useProfileMap();
+  const friendStats = useFriendStats(uid);
 
   const [addFriendOpen, setAddFriendOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
@@ -95,14 +99,7 @@ export default function GroupsPage() {
           <SectionTitle>Shared splits</SectionTitle>
           <Card className="mb-6">
             {groups.filter((g) => g.is_adhoc).map((g) => (
-              <Link href={`/groups/${g.id}`} key={g.id}>
-                <ListRow
-                  icon="receipt"
-                  iconBg="rgba(255,159,10,0.15)"
-                  title={g.name}
-                  subtitle="Split from a transaction"
-                />
-              </Link>
+              <AdhocSplitRow key={g.id} group={g} uid={uid!} profileMap={profileMap} currency={currency} />
             ))}
           </Card>
         </>
@@ -118,18 +115,29 @@ export default function GroupsPage() {
             {friends.map((f) => {
               const otherId = f.user_id === uid ? f.friend_id : f.user_id;
               const p = profileMap.get(otherId);
+              const st = friendStats.get(otherId);
+              const net = (st?.theyOwe ?? 0) - (st?.iOwe ?? 0);
               return (
-                <ListRow
-                  key={f.id}
-                  icon={<Avatar name={p?.display_name ?? "?"} id={otherId} size={36} src={p?.avatar_url} />}
-                  title={p?.display_name ?? "…"}
-                  subtitle={`@${p?.username ?? ""}`}
-                  right={
-                    <button className="text-sub2 p-1" onClick={() => removeFriendship(f.id)}>
-                      <Icon name="x" size={16} />
-                    </button>
-                  }
-                />
+                <Link href={`/friends/${otherId}`} key={f.id}>
+                  <ListRow
+                    icon={<Avatar name={p?.display_name ?? "?"} id={otherId} size={36} src={p?.avatar_url} />}
+                    title={p?.display_name ?? "…"}
+                    subtitle={
+                      `@${p?.username ?? ""}` +
+                      (st && st.events > 0 ? ` · ${st.events} ${st.events === 1 ? "event" : "events"}` : "")
+                    }
+                    right={
+                      <div className="flex items-center gap-2">
+                        {net !== 0 && (
+                          <span className={`text-[13px] font-semibold tabular-nums ${net > 0 ? "text-green" : "text-orange"}`}>
+                            {net > 0 ? `owes ${formatMoney(net, currency)}` : `you owe ${formatMoney(-net, currency)}`}
+                          </span>
+                        )}
+                        <Icon name="chevronRight" size={16} className="text-sub2" />
+                      </div>
+                    }
+                  />
+                </Link>
               );
             })}
             {outgoing.map((f) => {
@@ -151,6 +159,46 @@ export default function GroupsPage() {
       {addFriendOpen && <AddFriendSheet uid={uid!} existing={friendships} onClose={() => setAddFriendOpen(false)} />}
       {newGroupOpen && <NewGroupSheet uid={uid!} friends={friends} profileMap={profileMap} onClose={() => setNewGroupOpen(false)} />}
     </div>
+  );
+}
+
+function AdhocSplitRow({ group, uid, profileMap, currency }: { group: Group; uid: string; profileMap: Map<string, Profile>; currency: string }) {
+  const info = useLiveQuery(
+    async () => {
+      const act = (await db().activities.where("group_id").equals(group.id).toArray())[0];
+      if (!act) return null;
+      const splits = await db().activity_splits.where("activity_id").equals(act.id).toArray();
+      const owes = splits
+        .filter((s) => s.user_id !== act.paid_by)
+        .map((s) => ({ id: s.user_id, rem: Math.max(0, s.owed_amount - s.settled_amount) }));
+      return { act, owes, paidBy: act.paid_by };
+    },
+    [group.id]
+  );
+
+  return (
+    <Link href={`/groups/${group.id}`}>
+      <ListRow
+        icon="receipt"
+        iconBg="rgba(255,159,10,0.15)"
+        title={info?.act.title ?? group.name}
+        subtitle={
+          info
+            ? `${formatMoney(info.act.total_amount, currency)} total` +
+              (info.owes.length
+                ? " · " +
+                  info.owes
+                    .map((o) => {
+                      const name = o.id === uid ? "you" : (profileMap.get(o.id)?.display_name ?? "…").split(" ")[0];
+                      return o.rem > 0 ? `${name} owes ${formatMoney(o.rem, currency)}` : `${name} settled`;
+                    })
+                    .join(" · ")
+                : "")
+            : "Loading…"
+        }
+        right={<Icon name="chevronRight" size={16} className="text-sub2" />}
+      />
+    </Link>
   );
 }
 

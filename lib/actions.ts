@@ -153,7 +153,7 @@ export async function upsertProfile(p: {
   await enqueue("profiles", "insert", { ...row, localRow: row });
 }
 
-export async function updateProfile(id: string, patch: Partial<{ display_name: string; currency: string; savings_percent: number; avatar_url: string }>) {
+export async function updateProfile(id: string, patch: Partial<{ display_name: string; currency: string; savings_percent: number; avatar_url: string; email: string; show_email: boolean }>) {
   const cur = await db().profiles.get(id);
   if (!cur) return;
   const merged = { ...cur, ...patch };
@@ -225,7 +225,7 @@ export async function createActivity(input: {
   paid_by: string;
   title: string;
   total_amount: number;
-  splits: { user_id: string; owed_amount: number }[];
+  splits: { user_id: string; owed_amount: number; settled?: boolean }[];
   occurred_at?: string;
 }) {
   const activity: Activity = {
@@ -242,7 +242,7 @@ export async function createActivity(input: {
     activity_id: activity.id,
     user_id: s.user_id,
     owed_amount: s.owed_amount,
-    settled_amount: s.user_id === input.paid_by ? s.owed_amount : 0,
+    settled_amount: s.user_id === input.paid_by || s.settled ? s.owed_amount : 0,
   }));
   await db().activities.put(activity);
   await db().activity_splits.bulkPut(splits);
@@ -275,12 +275,14 @@ export async function transferActivityAdmin(activity: Activity, newAdminId: stri
  */
 export async function createSplitWithFriends(input: {
   created_by: string;
+  paid_by?: string;
   title: string;
   total_amount: number;
   my_share: number;
-  splits: { user_id: string; owed_amount: number }[];
+  splits: { user_id: string; owed_amount: number; settled?: boolean }[];
   group_id?: string;
 }) {
+  const paidBy = input.paid_by ?? input.created_by;
   let groupId = input.group_id;
   if (!groupId) {
     groupId = await createGroup(input.created_by, input.title, input.splits.map((s) => s.user_id), true);
@@ -288,7 +290,7 @@ export async function createSplitWithFriends(input: {
   await createActivity({
     group_id: groupId,
     created_by: input.created_by,
-    paid_by: input.created_by,
+    paid_by: paidBy,
     title: input.title,
     total_amount: input.total_amount,
     splits: [...input.splits, { user_id: input.created_by, owed_amount: input.my_share }],

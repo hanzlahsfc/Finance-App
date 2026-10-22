@@ -70,6 +70,22 @@ export default function SettingsPage() {
           title="Set aside from pay"
           right={<span className="text-[15px] font-semibold">{profile?.savings_percent ?? 20}%</span>}
         />
+        <ListRow
+          title="Show email to friends"
+          subtitle="Visible on your profile to friends"
+          right={
+            <button
+              aria-label="Toggle email visibility"
+              className={`w-[52px] h-[31px] rounded-full p-[3px] transition-colors ${profile?.show_email !== false ? "bg-green" : "bg-card3"}`}
+              onClick={() => void updateProfile(session.user.id, { show_email: !(profile?.show_email ?? true) })}
+            >
+              <span
+                className="block w-[25px] h-[25px] rounded-full bg-white shadow transition-transform"
+                style={{ transform: profile?.show_email !== false ? "translateX(21px)" : "translateX(0)" }}
+              />
+            </button>
+          }
+        />
       </Card>
 
       <SectionTitle>Appearance</SectionTitle>

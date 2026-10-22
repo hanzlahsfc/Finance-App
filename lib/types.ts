@@ -10,6 +10,8 @@ export interface Profile {
   avatar_url: string | null;
   currency: string;
   savings_percent: number;
+  email?: string | null;
+  show_email?: boolean;
   created_at?: string;
 }
 

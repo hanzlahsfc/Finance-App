@@ -43,6 +43,8 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
   const [pickedGroup, setPickedGroup] = useState<Group | null>(null);
   const [groupMembers, setGroupMembers] = useState<string[]>([]);
   const [owedAmounts, setOwedAmounts] = useState<Map<string, string>>(new Map());
+  const [payer, setPayer] = useState<string>("me");
+  const [paidSet, setPaidSet] = useState<Set<string>>(new Set());
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -94,12 +96,18 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
     setSaving(true);
     setError("");
     try {
+      const payerId = payer === "me" ? uid : payer;
       if (splitOn) {
         const splits = splitTargets
-          .map((id) => ({ user_id: id, owed_amount: parseFloat(owedAmounts.get(id) ?? "") || 0 }))
+          .map((id) => ({
+            user_id: id,
+            owed_amount: parseFloat(owedAmounts.get(id) ?? "") || 0,
+            settled: paidSet.has(id),
+          }))
           .filter((s) => s.owed_amount > 0);
         await createSplitWithFriends({
           created_by: uid,
+          paid_by: payerId,
           title: note || "Shared expense",
           total_amount: parsed,
           my_share: myShare,
@@ -201,6 +209,34 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
                 onChange={setSplitMode}
               />
 
+              {/* who fronted the money */}
+              {splitTargets.length > 0 && (
+                <>
+                  <label className="section-title mt-1">Paid by</label>
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar my-2">
+                    <button
+                      className={`pill shrink-0 ${payer === "me" ? "bg-tint text-white" : "bg-card2 text-sub"}`}
+                      onClick={() => setPayer("me")}
+                    >
+                      Me
+                    </button>
+                    {splitTargets.map((id) => {
+                      const p = profileMap.get(id);
+                      return (
+                        <button
+                          key={id}
+                          className={`pill shrink-0 flex items-center gap-1.5 ${payer === id ? "bg-tint text-white" : "bg-card2 text-sub"}`}
+                          onClick={() => setPayer(id)}
+                        >
+                          <Avatar name={p?.display_name ?? "?"} id={id} size={18} src={p?.avatar_url} />
+                          {(p?.display_name ?? "…").split(" ")[0]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
               {splitMode === "friends" ? (
                 <>
                   <div className="flex gap-2 overflow-x-auto no-scrollbar my-3">
@@ -225,7 +261,14 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
                   {splitTargets.map((fid) => (
                     <SplitAmountRow key={fid} id={fid} name={nameOf(fid)} avatar={profileMap.get(fid)?.avatar_url}
                       value={owedAmounts.get(fid) ?? ""}
-                      onChange={(v) => setOwedAmounts(new Map(owedAmounts).set(fid, v))} />
+                      onChange={(v) => setOwedAmounts(new Map(owedAmounts).set(fid, v))}
+                      isPayer={payer === fid}
+                      settled={paidSet.has(fid)}
+                      onTogglePaid={() => {
+                        const s = new Set(paidSet);
+                        if (s.has(fid)) s.delete(fid); else s.add(fid);
+                        setPaidSet(s);
+                      }} />
                   ))}
                 </>
               ) : (
@@ -247,14 +290,23 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
                   {splitTargets.map((mid) => (
                     <SplitAmountRow key={mid} id={mid} name={nameOf(mid)} avatar={profileMap.get(mid)?.avatar_url}
                       value={owedAmounts.get(mid) ?? ""}
-                      onChange={(v) => setOwedAmounts(new Map(owedAmounts).set(mid, v))} />
+                      onChange={(v) => setOwedAmounts(new Map(owedAmounts).set(mid, v))}
+                      isPayer={payer === mid}
+                      settled={paidSet.has(mid)}
+                      onTogglePaid={() => {
+                        const s = new Set(paidSet);
+                        if (s.has(mid)) s.delete(mid); else s.add(mid);
+                        setPaidSet(s);
+                      }} />
                   ))}
                 </>
               )}
 
               {splitTargets.length > 0 && (
                 <div className="flex justify-between items-center px-2 py-2.5 mt-1 rounded-xl bg-card2">
-                  <span className="text-[14px] text-sub">Your share</span>
+                  <span className="text-[14px] text-sub">
+                    Your share{payer !== "me" ? ` (owed to ${nameOf(payer).split(" ")[0]})` : ""}
+                  </span>
                   <span className={`text-[15px] font-bold tabular-nums ${myShare < 0 ? "text-red" : "text-green"}`}>
                     {formatMoney(myShare, currency)}
                   </span>
@@ -307,17 +359,28 @@ export function QuickAdd({ onClose }: { onClose: () => void }) {
 }
 
 function SplitAmountRow({
-  id, name, avatar, value, onChange,
+  id, name, avatar, value, onChange, isPayer, settled, onTogglePaid,
 }: {
   id: string; name: string; avatar?: string | null; value: string;
   onChange: (v: string) => void;
+  isPayer: boolean; settled: boolean; onTogglePaid: () => void;
 }) {
   return (
     <div className="list-row !px-2">
       <Avatar name={name} id={id} size={32} src={avatar} />
       <div className="flex-1 min-w-0">
         <div className="text-[15px] font-medium truncate">{name}</div>
+        {isPayer && <div className="text-[11px] text-tint">paid the bill</div>}
       </div>
+      {!isPayer && (
+        <button
+          className={`pill shrink-0 ${settled ? "bg-[rgba(48,209,88,0.15)] text-green" : "bg-card2 text-sub2"}`}
+          onClick={onTogglePaid}
+          title="Already paid their share"
+        >
+          {settled ? <><Icon name="check" size={11} /> paid</> : "owes"}
+        </button>
+      )}
       <div className="flex items-center gap-1">
         <span className="text-sub text-[13px]">Rs</span>
         <input

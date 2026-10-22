@@ -151,6 +151,53 @@ export function useGoals(userId?: string) {
   );
 }
 
+/** Per-friend shared-event stats: event count and balances across all groups. */
+export function useFriendStats(userId?: string) {
+  return useLiveQuery(
+    async () => {
+      const map = new Map<string, { events: number; theyOwe: number; iOwe: number }>();
+      if (!userId) return map;
+      const memberships = await db().group_members.where("user_id").equals(userId).toArray();
+      const groupIds = memberships.map((m) => m.group_id);
+      if (!groupIds.length) return map;
+      const acts = await db().activities.where("group_id").anyOf(groupIds).toArray();
+      const actIds = new Set(acts.map((a) => a.id));
+      const splits = (await db().activity_splits.toArray()).filter((s) => actIds.has(s.activity_id));
+      const byAct = new Map<string, typeof splits>();
+      for (const s of splits) {
+        const arr = byAct.get(s.activity_id) ?? [];
+        arr.push(s);
+        byAct.set(s.activity_id, arr);
+      }
+      const bump = (fid: string) => {
+        if (!map.has(fid)) map.set(fid, { events: 0, theyOwe: 0, iOwe: 0 });
+        return map.get(fid)!;
+      };
+      for (const a of acts) {
+        const ss = byAct.get(a.id) ?? [];
+        if (a.paid_by === userId) {
+          for (const s of ss) {
+            if (s.user_id === userId) continue;
+            const m = bump(s.user_id);
+            m.events++;
+            m.theyOwe += Math.max(0, s.owed_amount - s.settled_amount);
+          }
+        } else {
+          const mine = ss.find((s) => s.user_id === userId);
+          if (mine) {
+            const m = bump(a.paid_by);
+            m.events++;
+            m.iOwe += Math.max(0, mine.owed_amount - mine.settled_amount);
+          }
+        }
+      }
+      return map;
+    },
+    [userId],
+    new Map<string, { events: number; theyOwe: number; iOwe: number }>()
+  );
+}
+
 /** Set-aside pool: total saved vs. what's earmarked into goals and debts. */
 export function useSavingsPool(userId?: string, savingsPercent = 20) {
   const income = useIncome(userId);
