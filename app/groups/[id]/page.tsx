@@ -8,7 +8,7 @@ import { formatMoney, formatDayLabel } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
-import { createActivity, deleteActivity, transferActivityAdmin, recordPayment, addGroupMember, renameGroup, updateActivity, updateSplitAmount } from "@/lib/actions";
+import { createActivity, deleteActivity, transferActivityAdmin, recordPayment, addGroupMember, renameGroup, updateActivity, updateSplit, insertSplit, deleteSplit } from "@/lib/actions";
 import type { Activity, ActivitySplit, GroupMember } from "@/lib/types";
 
 export default function GroupPage({ params }: { params: Promise<{ id: string }> }) {
@@ -411,6 +411,7 @@ function ActivitySheet({
         <EditActivitySheet
           activity={activity}
           splits={splits}
+          members={members}
           profileMap={profileMap}
           nameOf={nameOf}
           onClose={() => setEditOpen(false)}
@@ -439,23 +440,53 @@ function ActivitySheet({
 }
 
 function EditActivitySheet({
-  activity, splits, profileMap, nameOf, onClose,
+  activity, splits, members, profileMap, nameOf, onClose,
 }: {
   activity: Activity;
   splits: ActivitySplit[];
+  members: GroupMember[];
   profileMap: Map<string, { display_name: string; avatar_url?: string | null }>;
   nameOf: (id: string) => string;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState(activity.title);
   const [total, setTotal] = useState(String(activity.total_amount));
+  const [paidBy, setPaidBy] = useState(activity.paid_by);
+  // people: existing splits + members added via the picker, minus removed
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [added, setAdded] = useState<Set<string>>(new Set());
   const [amounts, setAmounts] = useState<Map<string, string>>(
     new Map(splits.map((s) => [s.user_id, String(s.owed_amount)]))
   );
+  const [paids, setPaids] = useState<Map<string, string>>(
+    new Map(splits.map((s) => [s.user_id, String(s.settled_amount)]))
+  );
   const [saving, setSaving] = useState(false);
-  const totalParsed = parseFloat(total.replace(/,/g, ""));
-  const splitSum = splits.reduce((s, x) => s + (parseFloat(amounts.get(x.user_id) ?? "") || 0), 0);
-  const ok = title.trim() && totalParsed > 0 && Math.abs(splitSum - totalParsed) < 0.5;
+
+  const existingIds = splits.map((s) => s.user_id);
+  const activeIds = [
+    ...existingIds.filter((id) => !removed.has(id)),
+    ...[...added].filter((id) => !existingIds.includes(id)),
+  ];
+  const addable = members.map((m) => m.user_id).filter((id) => !activeIds.includes(id));
+
+  const totalParsed = parseFloat(total.replace(/,/g, "")) || 0;
+  const amt = (id: string) => parseFloat(amounts.get(id) ?? "") || 0;
+  const paid = (id: string) => parseFloat(paids.get(id) ?? "") || 0;
+  const splitSum = activeIds.reduce((s, id) => s + amt(id), 0);
+  const paidExceeds = activeIds.some((id) => paid(id) > amt(id));
+  const ok = title.trim() && totalParsed > 0 && activeIds.length > 0 && Math.abs(splitSum - totalParsed) < 0.5 && !paidExceeds;
+
+  const remove = (id: string) => {
+    const r = new Set(removed); r.add(id); setRemoved(r);
+    const a = new Set(added); a.delete(id); setAdded(a);
+  };
+  const add = (id: string) => {
+    const r = new Set(removed); r.delete(id); setRemoved(r);
+    const a = new Set(added); a.add(id); setAdded(a);
+    const am = new Map(amounts); if (!am.has(id)) am.set(id, ""); setAmounts(am);
+    const pd = new Map(paids); if (!pd.has(id)) pd.set(id, ""); setPaids(pd);
+  };
 
   return (
     <Sheet title="Edit event" onClose={onClose}>
@@ -464,43 +495,119 @@ function EditActivitySheet({
         <span className="text-sub text-[15px] font-medium">Rs</span>
         <input className="input" placeholder="Total" inputMode="decimal" value={total} onChange={(e) => setTotal(e.target.value.replace(/[^\d.,]/g, ""))} />
       </div>
-      <span className="section-title">Shares</span>
+
+      <label className="section-title">Paid by</label>
+      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
+        {activeIds.map((id) => (
+          <button
+            key={id}
+            className={`pill shrink-0 ${paidBy === id ? "bg-tint text-white" : "bg-card2 text-sub"}`}
+            onClick={() => setPaidBy(id)}
+          >
+            {nameOf(id).split(" ")[0]}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex justify-between px-2 mb-1">
+        <span className="section-title !mb-0">Shares</span>
+        <span className="text-[11px] text-sub2 self-end">share · paid so far</span>
+      </div>
       <div className="card mb-3">
-        {splits.map((s) => {
-          const locked = s.settled_amount > 0;
+        {activeIds.map((id) => {
+          const s = splits.find((x) => x.user_id === id);
+          const isPayer = id === paidBy;
           return (
-            <div key={s.id} className="list-row !px-2">
-              <Avatar name={nameOf(s.user_id)} id={s.user_id} size={32} src={profileMap.get(s.user_id)?.avatar_url} />
+            <div key={id} className="list-row !px-2">
+              <Avatar name={nameOf(id)} id={id} size={32} src={profileMap.get(id)?.avatar_url} />
               <div className="flex-1 min-w-0">
-                <div className="text-[15px] font-medium truncate">{nameOf(s.user_id)}</div>
-                {locked && <div className="text-[11px] text-sub2">has payments — can&apos;t go below {s.settled_amount}</div>}
+                <div className="text-[15px] font-medium truncate">
+                  {nameOf(id)}
+                  {isPayer && <span className="text-tint text-[11px]"> · paid the bill</span>}
+                </div>
               </div>
               <div className="flex items-center gap-1">
-                <span className="text-sub text-[13px]">Rs</span>
                 <input
                   className="input !py-2 text-right tabular-nums"
-                  style={{ width: 96 }}
+                  style={{ width: 76 }}
+                  placeholder="share"
                   inputMode="decimal"
-                  value={amounts.get(s.user_id) ?? ""}
-                  onChange={(e) => setAmounts(new Map(amounts).set(s.user_id, e.target.value.replace(/[^\d.]/g, "")))}
+                  value={amounts.get(id) ?? ""}
+                  onChange={(e) => setAmounts(new Map(amounts).set(id, e.target.value.replace(/[^\d.]/g, "")))}
                 />
+                {!isPayer ? (
+                  <input
+                    className="input !py-2 text-right tabular-nums"
+                    style={{ width: 76 }}
+                    placeholder="paid"
+                    inputMode="decimal"
+                    value={paids.get(id) ?? ""}
+                    onChange={(e) => setPaids(new Map(paids).set(id, e.target.value.replace(/[^\d.]/g, "")))}
+                  />
+                ) : (
+                  <span className="pill bg-[rgba(48,209,88,0.15)] text-green" style={{ width: 76, justifyContent: "center" }}>paid</span>
+                )}
+                {(!s || s.settled_amount === 0) && activeIds.length > 1 ? (
+                  <button className="text-sub2 p-1" onClick={() => remove(id)}>
+                    <Icon name="x" size={14} />
+                  </button>
+                ) : null}
               </div>
             </div>
           );
         })}
       </div>
+
+      {addable.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto no-scrollbar mb-3">
+          {addable.map((id) => (
+            <button key={id} className="pill shrink-0 bg-card2 text-sub flex items-center gap-1.5" onClick={() => add(id)}>
+              <Icon name="plus" size={12} /> {nameOf(id).split(" ")[0]}
+            </button>
+          ))}
+        </div>
+      )}
+
       <p className={`text-[13px] px-1 mb-4 ${ok ? "text-sub2" : "text-red"}`}>
-        Shares must add up to the total — currently {formatMoney(splitSum, "PKR")}
+        {paidExceeds
+          ? "Someone's paid amount is more than their share"
+          : `Shares must add up to the total — currently ${formatMoney(splitSum, "PKR")}`}
       </p>
       <button
         className="btn"
-        disabled={!ok || saving || splits.some((s) => (parseFloat(amounts.get(s.user_id) ?? "") || 0) < s.settled_amount)}
+        disabled={!ok || saving}
         onClick={async () => {
           setSaving(true);
-          await updateActivity(activity, { title: title.trim(), total_amount: totalParsed });
-          for (const s of splits) {
-            const v = parseFloat(amounts.get(s.user_id) ?? "") || 0;
-            if (v !== s.owed_amount) await updateSplitAmount(s, v);
+          const payerChanged = paidBy !== activity.paid_by;
+          await updateActivity(activity, { title: title.trim(), total_amount: totalParsed, paid_by: paidBy });
+          for (const id of removed) {
+            const s = splits.find((x) => x.user_id === id);
+            if (s) await deleteSplit(s.id);
+          }
+          for (const id of activeIds) {
+            const v = amt(id);
+            const p = id === paidBy ? v : paid(id);
+            const s = splits.find((x) => x.user_id === id);
+            if (!s) {
+              await insertSplit(activity.id, id, v, p);
+            } else {
+              const patch: { owed_amount?: number; settled_amount?: number } = {};
+              if (v !== s.owed_amount) patch.owed_amount = v;
+              if (p !== s.settled_amount) patch.settled_amount = p;
+              if (patch.owed_amount !== undefined || patch.settled_amount !== undefined || payerChanged) {
+                if (payerChanged && patch.settled_amount === undefined && s.settled_amount !== (id === paidBy ? v : s.settled_amount)) {
+                  patch.settled_amount = id === paidBy ? v : s.settled_amount;
+                }
+                await updateSplit(s, patch);
+              }
+            }
+          }
+          // payer change: reset the old payer's settled flag if they didn't keep it
+          if (payerChanged) {
+            const oldPayer = splits.find((x) => x.user_id === activity.paid_by);
+            if (oldPayer && oldPayer.settled_amount !== paid(oldPayer.user_id)) {
+              await updateSplit(oldPayer, { settled_amount: paid(oldPayer.user_id) });
+            }
           }
           onClose();
         }}

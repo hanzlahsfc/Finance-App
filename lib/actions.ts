@@ -262,14 +262,29 @@ export async function createActivity(input: {
   return activity.id;
 }
 
-export async function updateActivity(a: Activity, patch: Partial<Pick<Activity, "title" | "total_amount" | "occurred_at">>) {
+export async function updateActivity(a: Activity, patch: Partial<Pick<Activity, "title" | "total_amount" | "occurred_at" | "paid_by">>) {
   const merged = { ...a, ...patch };
   await enqueue("activities", "update", { id: a.id, localRow: merged, localPatch: patch });
 }
 
-export async function updateSplitAmount(s: ActivitySplit, owed_amount: number) {
-  const merged = { ...s, owed_amount };
-  await enqueue("activity_splits", "update", { id: s.id, localRow: merged, localPatch: { owed_amount } });
+export async function updateSplit(s: ActivitySplit, patch: Partial<Pick<ActivitySplit, "owed_amount" | "settled_amount">>) {
+  const merged = { ...s, ...patch };
+  await enqueue("activity_splits", "update", { id: s.id, localRow: merged, localPatch: patch });
+}
+
+export async function insertSplit(activity_id: string, user_id: string, owed_amount: number, settled_amount = 0) {
+  const s: ActivitySplit = { id: uuid(), activity_id, user_id, owed_amount, settled_amount };
+  await db().activity_splits.put(s);
+  await db().outbox.add({
+    op_id: uuid(), table: "activity_splits", action: "insert",
+    payload: { ...s, localRow: s }, created_at: Date.now(), attempts: 0,
+  });
+  void flush();
+}
+
+export async function deleteSplit(id: string) {
+  await db().activity_splits.delete(id);
+  await enqueue("activity_splits", "delete", { id });
 }
 
 export async function deleteActivity(activityId: string) {
