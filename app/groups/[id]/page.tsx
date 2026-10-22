@@ -8,7 +8,7 @@ import { formatMoney, formatDayLabel } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
-import { createActivity, deleteActivity, transferActivityAdmin, recordPayment, addGroupMember, renameGroup } from "@/lib/actions";
+import { createActivity, deleteActivity, transferActivityAdmin, recordPayment, addGroupMember, renameGroup, updateActivity, updateSplitAmount } from "@/lib/actions";
 import type { Activity, ActivitySplit, GroupMember } from "@/lib/types";
 
 export default function GroupPage({ params }: { params: Promise<{ id: string }> }) {
@@ -307,6 +307,7 @@ function ActivitySheet({
 }) {
   const [paySheet, setPaySheet] = useState<string | null>(null); // from_user
   const [adminOpen, setAdminOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const isAdmin = activity.created_by === uid;
   const nameOf = (id: string) => (id === uid ? "You" : profileMap.get(id)?.display_name ?? "…");
 
@@ -376,17 +377,22 @@ function ActivitySheet({
       )}
 
       {isAdmin && (
-        <div className="flex gap-2">
-          <button className="btn btn-secondary flex-1" onClick={() => setAdminOpen(true)}>
-            <Icon name="crown" size={17} /> Transfer admin
+        <>
+          <button className="btn btn-secondary" onClick={() => setEditOpen(true)}>
+            <Icon name="pencil" size={16} /> Edit event
           </button>
-          <button
-            className="btn btn-danger flex-1"
-            onClick={async () => { await deleteActivity(activity.id); onClose(); }}
-          >
-            <Icon name="trash" size={17} /> Delete
-          </button>
-        </div>
+          <div className="flex gap-2 mt-2">
+            <button className="btn btn-secondary flex-1" onClick={() => setAdminOpen(true)}>
+              <Icon name="crown" size={17} /> Transfer admin
+            </button>
+            <button
+              className="btn btn-danger flex-1"
+              onClick={async () => { await deleteActivity(activity.id); onClose(); }}
+            >
+              <Icon name="trash" size={17} /> Delete
+            </button>
+          </div>
+        </>
       )}
 
       {paySheet && (
@@ -398,6 +404,17 @@ function ActivitySheet({
           uid={uid}
           currency={currency}
           onClose={() => setPaySheet(null)}
+        />
+      )}
+
+      {editOpen && (
+        <EditActivitySheet
+          activity={activity}
+          splits={splits}
+          uid={uid}
+          profileMap={profileMap}
+          nameOf={nameOf}
+          onClose={() => setEditOpen(false)}
         />
       )}
 
@@ -418,6 +435,80 @@ function ActivitySheet({
           </div>
         </Sheet>
       )}
+    </Sheet>
+  );
+}
+
+function EditActivitySheet({
+  activity, splits, uid, profileMap, nameOf, onClose,
+}: {
+  activity: Activity;
+  splits: ActivitySplit[];
+  uid: string;
+  profileMap: Map<string, { display_name: string; avatar_url?: string | null }>;
+  nameOf: (id: string) => string;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState(activity.title);
+  const [total, setTotal] = useState(String(activity.total_amount));
+  const [amounts, setAmounts] = useState<Map<string, string>>(
+    new Map(splits.map((s) => [s.user_id, String(s.owed_amount)]))
+  );
+  const [saving, setSaving] = useState(false);
+  const totalParsed = parseFloat(total.replace(/,/g, ""));
+  const splitSum = splits.reduce((s, x) => s + (parseFloat(amounts.get(x.user_id) ?? "") || 0), 0);
+  const ok = title.trim() && totalParsed > 0 && Math.abs(splitSum - totalParsed) < 0.5;
+
+  return (
+    <Sheet title="Edit event" onClose={onClose}>
+      <input className="input mb-3" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-sub text-[15px] font-medium">Rs</span>
+        <input className="input" placeholder="Total" inputMode="decimal" value={total} onChange={(e) => setTotal(e.target.value.replace(/[^\d.,]/g, ""))} />
+      </div>
+      <span className="section-title">Shares</span>
+      <div className="card mb-3">
+        {splits.map((s) => {
+          const locked = s.settled_amount > 0;
+          return (
+            <div key={s.id} className="list-row !px-2">
+              <Avatar name={nameOf(s.user_id)} id={s.user_id} size={32} src={profileMap.get(s.user_id)?.avatar_url} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[15px] font-medium truncate">{nameOf(s.user_id)}</div>
+                {locked && <div className="text-[11px] text-sub2">has payments — can&apos;t go below {s.settled_amount}</div>}
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-sub text-[13px]">Rs</span>
+                <input
+                  className="input !py-2 text-right tabular-nums"
+                  style={{ width: 96 }}
+                  inputMode="decimal"
+                  value={amounts.get(s.user_id) ?? ""}
+                  onChange={(e) => setAmounts(new Map(amounts).set(s.user_id, e.target.value.replace(/[^\d.]/g, "")))}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className={`text-[13px] px-1 mb-4 ${ok ? "text-sub2" : "text-red"}`}>
+        Shares must add up to the total — currently {formatMoney(splitSum, "PKR")}
+      </p>
+      <button
+        className="btn"
+        disabled={!ok || saving || splits.some((s) => (parseFloat(amounts.get(s.user_id) ?? "") || 0) < s.settled_amount)}
+        onClick={async () => {
+          setSaving(true);
+          await updateActivity(activity, { title: title.trim(), total_amount: totalParsed });
+          for (const s of splits) {
+            const v = parseFloat(amounts.get(s.user_id) ?? "") || 0;
+            if (v !== s.owed_amount) await updateSplitAmount(s, v);
+          }
+          onClose();
+        }}
+      >
+        Save changes
+      </button>
     </Sheet>
   );
 }

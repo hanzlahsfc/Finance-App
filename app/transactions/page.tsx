@@ -8,7 +8,7 @@ import { Card, Segmented, EmptyState, ListRow } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
 import { CATEGORIES, categoryById } from "@/lib/categories";
-import { deleteTransaction } from "@/lib/actions";
+import { deleteTransaction, updateTransaction } from "@/lib/actions";
 import type { Transaction } from "@/lib/types";
 
 type Range = "daily" | "weekly" | "all";
@@ -134,39 +134,96 @@ export default function TransactionsPage() {
       )}
 
       {selected && (
-        <Sheet title="Transaction" onClose={() => setSelected(null)}>
-          <div className="text-center py-4">
-            <span className="text-[40px]">{categoryById(selected.category).icon}</span>
-            <p className="text-[34px] font-bold tabular-nums mt-2">{formatMoney(selected.amount, currency)}</p>
-            <p className="text-sub text-[15px]">{selected.note || categoryById(selected.category).label}</p>
-            <p className="text-sub2 text-[13px] mt-1">
-              {formatDayLabel(selected.occurred_at)} · {formatTime(selected.occurred_at)} · {categoryById(selected.category).label}
-            </p>
-          </div>
-          {(selected.place || selected.counterparty) && (
-            <Card className="mt-4">
-              {selected.place && (
-                <ListRow title="Place" right={<span className="text-[15px]">{selected.place}</span>} />
-              )}
-              {selected.counterparty && (
-                <ListRow
-                  title={selected.kind === "income" || selected.kind === "loan_taken" ? "From" : "To"}
-                  right={<span className="text-[15px]">{selected.counterparty}</span>}
-                />
-              )}
-            </Card>
-          )}
-          <button
-            className="btn btn-danger mt-4"
-            onClick={async () => {
-              await deleteTransaction(selected.id);
-              setSelected(null);
-            }}
-          >
-            <Icon name="trash" size={18} /> Delete transaction
-          </button>
-        </Sheet>
+        <TxnDetail
+          t={txns.find((x) => x.id === selected.id) ?? selected}
+          currency={currency}
+          onClose={() => setSelected(null)}
+        />
       )}
     </div>
+  );
+}
+
+function TxnDetail({ t, currency, onClose }: { t: Transaction; currency: string; onClose: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [amount, setAmount] = useState(String(t.amount));
+  const [note, setNote] = useState(t.note);
+  const [place, setPlace] = useState(t.place);
+  const [counterparty, setCounterparty] = useState(t.counterparty);
+  const [category, setCategory] = useState(t.category);
+  const [saving, setSaving] = useState(false);
+  const parsed = parseFloat(amount.replace(/,/g, ""));
+  const pickerCats = t.kind === "income" ? CATEGORIES.filter((c) => ["income", "other"].includes(c.id)) : CATEGORIES.filter((c) => c.id !== "income");
+
+  if (!editing) {
+    return (
+      <Sheet title="Transaction" onClose={onClose}>
+        <div className="text-center py-4">
+          <span className="text-[40px]">{categoryById(t.category).icon}</span>
+          <p className="text-[34px] font-bold tabular-nums mt-2">{formatMoney(t.amount, currency)}</p>
+          <p className="text-sub text-[15px]">{t.note || categoryById(t.category).label}</p>
+          <p className="text-sub2 text-[13px] mt-1">
+            {formatDayLabel(t.occurred_at)} · {formatTime(t.occurred_at)} · {categoryById(t.category).label}
+          </p>
+        </div>
+        {(t.place || t.counterparty) && (
+          <Card className="mt-4">
+            {t.place && (
+              <ListRow title="Place" right={<span className="text-[15px]">{t.place}</span>} />
+            )}
+            {t.counterparty && (
+              <ListRow
+                title={t.kind === "income" || t.kind === "loan_taken" ? "From" : "To"}
+                right={<span className="text-[15px]">{t.counterparty}</span>}
+              />
+            )}
+          </Card>
+        )}
+        <button className="btn mt-4" onClick={() => setEditing(true)}>Edit</button>
+        <button
+          className="btn btn-danger mt-2"
+          onClick={async () => {
+            await deleteTransaction(t.id);
+            onClose();
+          }}
+        >
+          <Icon name="trash" size={18} /> Delete transaction
+        </button>
+      </Sheet>
+    );
+  }
+
+  return (
+    <Sheet title="Edit transaction" onClose={onClose}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-sub text-[15px] font-medium">Rs</span>
+        <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))} />
+      </div>
+      <input className="input mb-3" placeholder="Note" value={note} onChange={(e) => setNote(e.target.value)} />
+      <div className="flex gap-2 mb-4">
+        <input className="input" placeholder="Place" value={place} onChange={(e) => setPlace(e.target.value)} />
+        <input className="input" placeholder={t.kind === "income" || t.kind === "loan_taken" ? "From" : "To"} value={counterparty} onChange={(e) => setCounterparty(e.target.value)} />
+      </div>
+      <span className="section-title">Category</span>
+      <div className="grid grid-cols-4 gap-2 mb-6">
+        {pickerCats.map((c) => (
+          <button key={c.id} className={`chip ${category === c.id ? "on" : ""}`} onClick={() => setCategory(c.id)}>
+            <span className="chip-icon" style={{ color: c.color }}>{c.icon}</span>
+            {c.label.split(" ")[0]}
+          </button>
+        ))}
+      </div>
+      <button
+        className="btn"
+        disabled={!parsed || saving}
+        onClick={async () => {
+          setSaving(true);
+          await updateTransaction(t, { amount: parsed, note: note.trim(), place: place.trim(), counterparty: counterparty.trim(), category });
+          onClose();
+        }}
+      >
+        Save changes
+      </button>
+    </Sheet>
   );
 }

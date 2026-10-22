@@ -47,6 +47,11 @@ export async function addTransaction(input: {
   return row.id;
 }
 
+export async function updateTransaction(t: Transaction, patch: Partial<Transaction>) {
+  const merged = { ...t, ...patch };
+  await enqueue("transactions", "update", { id: t.id, localRow: merged, localPatch: patch });
+}
+
 export async function deleteTransaction(id: string) {
   await enqueue("transactions", "delete", { id });
 }
@@ -255,6 +260,16 @@ export async function createActivity(input: {
   }
   void flush();
   return activity.id;
+}
+
+export async function updateActivity(a: Activity, patch: Partial<Pick<Activity, "title" | "total_amount" | "occurred_at">>) {
+  const merged = { ...a, ...patch };
+  await enqueue("activities", "update", { id: a.id, localRow: merged, localPatch: patch });
+}
+
+export async function updateSplitAmount(s: ActivitySplit, owed_amount: number) {
+  const merged = { ...s, owed_amount };
+  await enqueue("activity_splits", "update", { id: s.id, localRow: merged, localPatch: { owed_amount } });
 }
 
 export async function deleteActivity(activityId: string) {
