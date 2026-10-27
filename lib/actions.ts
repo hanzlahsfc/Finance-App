@@ -18,6 +18,9 @@ import type {
   Group,
   Obligation,
   SavingsGoal,
+  Trip,
+  TripMember,
+  TripContribution,
 } from "./types";
 
 // ---------- transactions ----------
@@ -445,6 +448,109 @@ export async function updateGoal(g: SavingsGoal, patch: Partial<SavingsGoal>) {
 
 export async function deleteGoal(id: string) {
   await enqueue("savings_goals", "delete", { id });
+}
+
+// ---------- plans ----------
+
+export async function deletePlan(id: string) {
+  await db().plan_files.delete(id);
+  await enqueue("plans", "delete", { id });
+}
+
+// ---------- trip pool ----------
+
+export async function createTrip(input: {
+  created_by: string;
+  name: string;
+  collector_id: string;
+  target_amount: number;
+  member_ids: string[];
+}) {
+  const trip: Trip = {
+    id: uuid(),
+    name: input.name.trim(),
+    created_by: input.created_by,
+    collector_id: input.collector_id,
+    target_amount: input.target_amount,
+  };
+  const memberIds = [...new Set([input.created_by, input.collector_id, ...input.member_ids])];
+  const members: TripMember[] = memberIds.map((uid) => ({
+    trip_id: trip.id,
+    user_id: uid,
+    paid_amount: 0,
+    added_by: input.created_by,
+  }));
+  await db().trips.put(trip);
+  await db().trip_members.bulkPut(members);
+  await enqueue("trips", "insert", { ...trip, localRow: trip });
+  // members queued after the trip so it exists first — keep order via outbox seq
+  for (const m of members) {
+    await db().outbox.add({
+      op_id: uuid(), table: "trip_members", action: "insert",
+      payload: { trip_id: m.trip_id, user_id: m.user_id, added_by: m.added_by, localRow: m },
+      created_at: Date.now(), attempts: 0,
+    });
+  }
+  void flush();
+  return trip.id;
+}
+
+export async function addTripMember(tripId: string, userId: string, addedBy: string) {
+  const m: TripMember = { trip_id: tripId, user_id: userId, paid_amount: 0, added_by: addedBy };
+  await enqueue("trip_members", "insert", {
+    trip_id: tripId, user_id: userId, added_by: addedBy, localRow: m,
+  });
+}
+
+export async function removeTripMember(tripId: string, userId: string) {
+  await enqueue("trip_members", "delete", { trip_id: tripId, user_id: userId });
+}
+
+export async function deleteTrip(id: string) {
+  // cascades server-side; locally remove children too
+  await db().trip_members.where("trip_id").equals(id).delete();
+  await db().trip_contributions.where("trip_id").equals(id).delete();
+  await enqueue("trips", "delete", { id });
+}
+
+/** Member logs money handed to the collector — pending until they confirm. */
+export async function addTripContribution(input: {
+  trip_id: string;
+  user_id: string;
+  amount: number;
+  paid_at?: string;
+}) {
+  const row: TripContribution = {
+    id: uuid(),
+    trip_id: input.trip_id,
+    user_id: input.user_id,
+    amount: input.amount,
+    status: "pending",
+    paid_at: input.paid_at ?? new Date().toISOString(),
+    received_at: null,
+  };
+  await enqueue("trip_contributions", "insert", { ...row, localRow: row });
+  return row.id;
+}
+
+/** Collector confirms they received the money. */
+export async function approveTripContribution(c: TripContribution) {
+  const merged: TripContribution = { ...c, status: "received", received_at: new Date().toISOString() };
+  await enqueue("trip_contributions", "update", {
+    id: c.id, localRow: merged,
+    localPatch: { status: "received", received_at: merged.received_at },
+  });
+  // optimistically bump member progress — the server trigger is authoritative
+  const m = await db().trip_members.get([c.trip_id, c.user_id]);
+  if (m) await db().trip_members.put({ ...m, paid_amount: m.paid_amount + c.amount });
+}
+
+export async function deleteTripContribution(c: TripContribution) {
+  await enqueue("trip_contributions", "delete", { id: c.id });
+  if (c.status === "received") {
+    const m = await db().trip_members.get([c.trip_id, c.user_id]);
+    if (m) await db().trip_members.put({ ...m, paid_amount: Math.max(0, m.paid_amount - c.amount) });
+  }
 }
 
 /** Resize a photo client-side and push it to the avatars bucket. */

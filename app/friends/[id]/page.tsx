@@ -7,7 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useApp } from "@/lib/store";
 import { useFriendships, useProfileMap, usePlans } from "@/lib/hooks";
 import { db } from "@/lib/db";
-import { removeFriendship } from "@/lib/actions";
+import { removeFriendship, deleteActivity } from "@/lib/actions";
 import { formatMoney, formatDayLabel } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState } from "@/components/ui";
 import { PlanSheet } from "@/components/PlanSheet";
@@ -40,6 +40,7 @@ export default function FriendPage() {
   const [confirming, setConfirming] = useState(false);
   const plans = usePlans(friendId);
   const [openPlan, setOpenPlan] = useState<Plan | null>(null);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
   const events = useLiveQuery(
     async (): Promise<SharedEvent[]> => {
@@ -136,13 +137,42 @@ export default function FriendPage() {
                 title={e.activity.title}
                 subtitle={`${e.groupName} · ${formatDayLabel(e.activity.occurred_at)} · total ${formatMoney(e.activity.total_amount, currency)}`}
                 right={
-                  e.friendBalance > 0 ? (
-                    <span className="text-green text-[14px] font-semibold tabular-nums">owes {formatMoney(e.friendBalance, currency)}</span>
-                  ) : e.friendBalance < 0 ? (
-                    <span className="text-orange text-[14px] font-semibold tabular-nums">you owe {formatMoney(-e.friendBalance, currency)}</span>
-                  ) : (
-                    <span className="text-sub text-[13px]">settled</span>
-                  )
+                  <div className="flex items-center gap-2">
+                    {e.friendBalance > 0 ? (
+                      <span className="text-green text-[14px] font-semibold tabular-nums">owes {formatMoney(e.friendBalance, currency)}</span>
+                    ) : e.friendBalance < 0 ? (
+                      <span className="text-orange text-[14px] font-semibold tabular-nums">you owe {formatMoney(-e.friendBalance, currency)}</span>
+                    ) : (
+                      <span className="text-sub text-[13px]">settled</span>
+                    )}
+                    {e.activity.created_by === uid &&
+                      (confirmDel === e.activity.id ? (
+                        <button
+                          className="pill text-red"
+                          style={{ background: "rgba(255,69,58,0.15)" }}
+                          onClick={(ev) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            void deleteActivity(e.activity.id);
+                            setConfirmDel(null);
+                          }}
+                        >
+                          Delete?
+                        </button>
+                      ) : (
+                        <button
+                          aria-label="Delete event"
+                          className="text-sub2 p-1 -mr-1"
+                          onClick={(ev) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            setConfirmDel(e.activity.id);
+                          }}
+                        >
+                          <Icon name="trash" size={16} />
+                        </button>
+                      ))}
+                  </div>
                 }
               />
             </Link>

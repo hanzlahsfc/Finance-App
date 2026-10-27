@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Icon } from "./Icon";
 import { QuickAdd } from "./QuickAdd";
 import { useApp } from "@/lib/store";
+import { OBLIGATIONS_USERNAME } from "@/lib/utils";
 
 const TABS = [
   { href: "/", label: "Home", icon: "house" as const },
@@ -14,20 +15,24 @@ const TABS = [
   { href: "/groups", label: "Friends", icon: "people" as const },
 ];
 
+const TRIP_TAB = { href: "/trip", label: "Trip", icon: "send" as const };
+
 const HIDE_ON = ["/login", "/onboarding", "/auth/callback"];
 
 export function TabBar() {
   const pathname = usePathname();
   const [addOpen, setAddOpen] = useState(false);
-  const { session } = useApp();
+  const { session, profile } = useApp();
 
   if (HIDE_ON.some((p) => pathname.startsWith(p)) || !session) return null;
+
+  const tabs = profile?.username === OBLIGATIONS_USERNAME ? TABS : [...TABS.slice(0, 2), TRIP_TAB, TABS[3]];
 
   return (
     <>
       <nav className="tabbar">
         <div className="tabbar-inner">
-          {TABS.slice(0, 2).map((t) => (
+          {tabs.slice(0, 2).map((t) => (
             <Link key={t.href} href={t.href} className={`tabitem ${pathname === t.href ? "on" : ""}`}>
               <Icon name={t.icon} size={24} strokeWidth={pathname === t.href ? 2.2 : 1.7} />
               {t.label}
@@ -38,7 +43,7 @@ export function TabBar() {
               <Icon name="plus" size={26} strokeWidth={2.4} color="#fff" />
             </button>
           </div>
-          {TABS.slice(2).map((t) => (
+          {tabs.slice(2).map((t) => (
             <Link key={t.href} href={t.href} className={`tabitem ${pathname === t.href ? "on" : ""}`}>
               <Icon name={t.icon} size={24} strokeWidth={pathname === t.href ? 2.2 : 1.7} />
               {t.label}

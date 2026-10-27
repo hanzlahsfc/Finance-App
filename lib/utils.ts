@@ -2,6 +2,9 @@ export function uuid(): string {
   return crypto.randomUUID();
 }
 
+/** Only this user keeps the Obligations tab — everyone else gets Trip. */
+export const OBLIGATIONS_USERNAME = "hanzlah";
+
 import { isAmountsHidden } from "./privacy";
 
 export function formatMoney(amount: number, currency = "PKR", raw = false): string {

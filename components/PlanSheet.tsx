@@ -5,7 +5,7 @@ import { Icon } from "./Icon";
 import { loadPlanHtml } from "@/lib/plans";
 import type { Plan } from "@/lib/types";
 
-export function PlanSheet({ plan, onClose }: { plan: Plan; onClose: () => void }) {
+export function PlanSheet({ plan, onClose, onDelete }: { plan: Plan; onClose: () => void; onDelete?: () => void }) {
   const [html, setHtml] = useState<string | null>(null);
   const [err, setErr] = useState(false);
 
@@ -29,9 +29,16 @@ export function PlanSheet({ plan, onClose }: { plan: Plan; onClose: () => void }
     <div className="plan-overlay">
       <div className="plan-bar">
         <span className="plan-title">{plan.title}</span>
-        <button onClick={onClose} aria-label="Close" className="plan-close">
-          <Icon name="x" size={20} />
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {onDelete && (
+            <button onClick={onDelete} aria-label="Delete plan" className="plan-close" style={{ color: "var(--color-red)" }}>
+              <Icon name="trash" size={18} />
+            </button>
+          )}
+          <button onClick={onClose} aria-label="Close" className="plan-close">
+            <Icon name="x" size={20} />
+          </button>
+        </div>
       </div>
       {err ? (
         <div className="plan-msg">Couldn&apos;t load — check your connection</div>

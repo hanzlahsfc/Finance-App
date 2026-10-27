@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
+import { OBLIGATIONS_USERNAME } from "@/lib/utils";
 import { useObligations, useGoals, useOwedToMe, useFriendships, useProfileMap, useSavingsPool } from "@/lib/hooks";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Segmented, EmptyState, EyeToggle } from "@/components/ui";
@@ -42,7 +44,12 @@ export default function ObligationsPage() {
   const iOwePersonal = open.filter((o) => o.direction === "i_owe").reduce((s, o) => s + o.total_amount - o.settled_amount, 0);
   const owedPersonal = open.filter((o) => o.direction === "owed_to_me").reduce((s, o) => s + o.total_amount - o.settled_amount, 0);
 
-  if (!session) return null;
+  const router = useRouter();
+  useEffect(() => {
+    if (profile && profile.username !== OBLIGATIONS_USERNAME) router.replace("/trip");
+  }, [profile, router]);
+
+  if (!session || (profile && profile.username !== OBLIGATIONS_USERNAME)) return null;
 
   return (
     <div className="screen px-5 pt-14">

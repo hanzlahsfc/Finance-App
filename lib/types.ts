@@ -162,3 +162,32 @@ export interface Settlement {
   created_by: string;
   created_at?: string;
 }
+
+// ---------- trip pool ----------
+
+export interface Trip {
+  id: string;
+  name: string;
+  created_by: string;
+  collector_id: string;
+  target_amount: number;
+  created_at?: string;
+}
+
+export interface TripMember {
+  trip_id: string;
+  user_id: string;
+  paid_amount: number;
+  added_by?: string | null;
+  added_at?: string;
+}
+
+export interface TripContribution {
+  id: string;
+  trip_id: string;
+  user_id: string;
+  amount: number;
+  status: "pending" | "received";
+  paid_at: string;
+  received_at: string | null;
+}

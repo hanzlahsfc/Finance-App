@@ -20,6 +20,9 @@ const MIRROR_TABLES = [
   "obligations",
   "savings_goals",
   "plans",
+  "trips",
+  "trip_members",
+  "trip_contributions",
 ] as const;
 
 type MirrorTable = (typeof MIRROR_TABLES)[number];
@@ -91,7 +94,9 @@ export async function applyLocal(
   } else if (action === "delete") {
     const key = table === "group_members"
       ? [payload.group_id, payload.user_id]
-      : payload.id;
+      : table === "trip_members"
+        ? [payload.trip_id, payload.user_id]
+        : payload.id;
     await t.delete(key);
   }
 }
@@ -120,9 +125,10 @@ async function applyRemote(item: OutboxItem): Promise<void> {
   if (action === "update") {
     const { id, ...rest } = clean;
     const patch = (payload.localPatch as Record<string, unknown>) ?? rest;
-    if (table === "group_members") {
+    if (table === "group_members" || table === "trip_members") {
+      const idCol = table === "group_members" ? "group_id" : "trip_id";
       const { error } = await sb.from(table).update(patch)
-        .eq("group_id", clean.group_id).eq("user_id", clean.user_id);
+        .eq(idCol, clean[idCol]).eq("user_id", clean.user_id);
       if (error) throw error;
     } else {
       const { error } = await sb.from(table).update(patch).eq("id", id);
@@ -131,9 +137,10 @@ async function applyRemote(item: OutboxItem): Promise<void> {
     return;
   }
   if (action === "delete") {
-    if (table === "group_members") {
+    if (table === "group_members" || table === "trip_members") {
+      const idCol = table === "group_members" ? "group_id" : "trip_id";
       const { error } = await sb.from(table).delete()
-        .eq("group_id", clean.group_id).eq("user_id", clean.user_id);
+        .eq(idCol, clean[idCol]).eq("user_id", clean.user_id);
       if (error) throw error;
     } else {
       const { error } = await sb.from(table).delete().eq("id", clean.id);
@@ -191,7 +198,7 @@ export async function pullAll(): Promise<void> {
   emit();
   try {
     // Personal tables
-    const [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes, plansRes] =
+    const [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes, plansRes, tripsRes, tmRes, tcRes] =
       await Promise.all([
         sb.from("profiles").select("*"),
         sb.from("friendships").select("*"),
@@ -204,8 +211,11 @@ export async function pullAll(): Promise<void> {
         sb.from("obligations").select("*"),
         sb.from("savings_goals").select("*"),
         sb.from("plans").select("*"),
+        sb.from("trips").select("*"),
+        sb.from("trip_members").select("*"),
+        sb.from("trip_contributions").select("*"),
       ]);
-    for (const r of [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes, plansRes]) {
+    for (const r of [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes, plansRes, tripsRes, tmRes, tcRes]) {
       if (r.error) throw r.error;
     }
 
@@ -249,6 +259,9 @@ export async function pullAll(): Promise<void> {
       obligations: obligRes.data ?? [],
       savings_goals: goalsRes.data ?? [],
       plans: plansRes.data ?? [],
+      trips: tripsRes.data ?? [],
+      trip_members: tmRes.data ?? [],
+      trip_contributions: tcRes.data ?? [],
     };
 
     await db().transaction(
@@ -293,6 +306,9 @@ function subscribeRealtime() {
     .on("postgres_changes", { event: "*", schema: "public", table: "settlements" }, (e) => applyRealtime("settlements", e))
     .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, (e) => applyRealtime("group_members", e))
     .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, (e) => applyRealtime("friendships", e))
+    .on("postgres_changes", { event: "*", schema: "public", table: "trips" }, (e) => applyRealtime("trips", e))
+    .on("postgres_changes", { event: "*", schema: "public", table: "trip_members" }, (e) => applyRealtime("trip_members", e))
+    .on("postgres_changes", { event: "*", schema: "public", table: "trip_contributions" }, (e) => applyRealtime("trip_contributions", e))
     .subscribe();
 }
 
@@ -302,9 +318,11 @@ async function applyRealtime(
 ) {
   const t = db().table(table);
   if (e.eventType === "DELETE") {
-    const old = e.old as { id?: string; group_id?: string; user_id?: string };
+    const old = e.old as { id?: string; group_id?: string; trip_id?: string; user_id?: string };
     if (table === "group_members" && old.group_id && old.user_id) {
       await t.delete([old.group_id, old.user_id]);
+    } else if (table === "trip_members" && old.trip_id && old.user_id) {
+      await t.delete([old.trip_id, old.user_id]);
     } else if (old.id) {
       await t.delete(old.id);
     }

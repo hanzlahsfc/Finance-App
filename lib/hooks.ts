@@ -3,7 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "./db";
 import { startOfWeek, endOfWeek, toISODate, billPeriodStart } from "./utils";
-import type { Profile, Transaction, Bill, BillPayment, Obligation, SavingsGoal, Plan } from "./types";
+import type { Profile, Transaction, Bill, BillPayment, Obligation, SavingsGoal, Plan, Trip } from "./types";
 
 export function useTransactions(userId?: string) {
   return useLiveQuery(
@@ -156,6 +156,38 @@ export function usePlans(userId?: string) {
     async () => (userId ? db().plans.where("user_id").equals(userId).toArray() : []),
     [userId],
     [] as Plan[]
+  );
+}
+
+export function useTrips(userId?: string) {
+  return useLiveQuery(
+    async () => {
+      if (!userId) return [];
+      const mems = await db().trip_members.where("user_id").equals(userId).toArray();
+      const trips = await db().trips.bulkGet(mems.map((m) => m.trip_id));
+      return trips.filter(Boolean).sort(
+        (a, b) => (b!.created_at ?? "").localeCompare(a!.created_at ?? "")
+      ) as NonNullable<(typeof trips)[number]>[];
+    },
+    [userId],
+    [] as Trip[]
+  );
+}
+
+export function useTrip(tripId?: string) {
+  return useLiveQuery(
+    async () => {
+      if (!tripId) return null;
+      const [trip, members, contributions] = await Promise.all([
+        db().trips.get(tripId),
+        db().trip_members.where("trip_id").equals(tripId).toArray(),
+        db().trip_contributions.where("trip_id").equals(tripId).toArray(),
+      ]);
+      contributions.sort((a, b) => b.paid_at.localeCompare(a.paid_at));
+      return { trip: trip ?? null, members, contributions };
+    },
+    [tripId],
+    null
   );
 }
 

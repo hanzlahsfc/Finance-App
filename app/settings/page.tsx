@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp, useSyncState } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
-import { updateProfile, uploadAvatar } from "@/lib/actions";
+import { updateProfile, uploadAvatar, deletePlan } from "@/lib/actions";
 import { pullAll, flush } from "@/lib/sync";
 import { exportData, importData } from "@/lib/backup";
 import { Card, SectionTitle, ListRow, Avatar, Segmented } from "@/components/ui";
@@ -13,6 +13,7 @@ import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
 import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
 import { usePlans } from "@/lib/hooks";
+import { OBLIGATIONS_USERNAME } from "@/lib/utils";
 import { toggleAmountsHidden } from "@/lib/privacy";
 import { PlanSheet } from "@/components/PlanSheet";
 import type { Plan } from "@/lib/types";
@@ -56,6 +57,23 @@ export default function SettingsPage() {
           onClick={() => setEditOpen(true)}
         />
       </Card>
+
+      {profile?.username === OBLIGATIONS_USERNAME && (
+        <>
+          <SectionTitle>Trip</SectionTitle>
+          <Card className="mb-6">
+            <Link href="/trip">
+              <ListRow
+                icon="send"
+                iconBg="rgba(0,200,83,0.15)"
+                title="Trip fund"
+                subtitle="Save toward the trip with friends"
+                right={<Icon name="chevronRight" size={16} className="text-sub2" />}
+              />
+            </Link>
+          </Card>
+        </>
+      )}
 
       {myPlans.length > 0 && (
         <>
@@ -238,7 +256,16 @@ export default function SettingsPage() {
       <p className="text-center text-sub2 text-[12px] mb-8">Hisab · made for friends</p>
 
       {editOpen && <EditProfileSheet onClose={() => setEditOpen(false)} />}
-      {openPlan && <PlanSheet plan={openPlan} onClose={() => setOpenPlan(null)} />}
+      {openPlan && (
+        <PlanSheet
+          plan={openPlan}
+          onClose={() => setOpenPlan(null)}
+          onDelete={() => {
+            void deletePlan(openPlan.id);
+            setOpenPlan(null);
+          }}
+        />
+      )}
     </div>
   );
 }
