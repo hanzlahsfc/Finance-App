@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { useTrips, useProfileMap } from "@/lib/hooks";
+import { pullAll } from "@/lib/sync";
 import { createTrip } from "@/lib/actions";
 import { Card, EmptyState } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
@@ -22,6 +23,16 @@ export default function TripPage() {
   useEffect(() => {
     if (trips && trips.length > 0) router.replace(`/trip/${trips[0].id}`);
   }, [trips, router]);
+
+  // If the local mirror is stale (member rows wiped before they reached the
+  // server), pull once so a trip we're in shows up instead of "No trip yet".
+  const triedPull = useRef(false);
+  useEffect(() => {
+    if (!triedPull.current && trips && trips.length === 0 && navigator.onLine) {
+      triedPull.current = true;
+      void pullAll();
+    }
+  }, [trips]);
 
   if (!session || trips === undefined || trips.length > 0) return null;
 
