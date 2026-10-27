@@ -495,6 +495,11 @@ export async function createTrip(input: {
   return trip.id;
 }
 
+export async function updateTrip(t: Trip, patch: Partial<Pick<Trip, "name" | "target_amount" | "collector_id">>) {
+  const merged = { ...t, ...patch };
+  await enqueue("trips", "update", { id: t.id, localRow: merged, localPatch: patch });
+}
+
 export async function addTripMember(tripId: string, userId: string, addedBy: string) {
   const m: TripMember = { trip_id: tripId, user_id: userId, paid_amount: 0, added_by: addedBy };
   await enqueue("trip_members", "insert", {

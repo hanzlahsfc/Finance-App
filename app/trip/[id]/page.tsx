@@ -10,8 +10,8 @@ import { Card, SectionTitle, ListRow, Avatar, EmptyState } from "@/components/ui
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
 import { UserPicker } from "@/components/UserPicker";
-import { addTripMember, removeTripMember, deleteTrip, addTripContribution, approveTripContribution, deleteTripContribution } from "@/lib/actions";
-import type { TripMember, TripContribution } from "@/lib/types";
+import { addTripMember, removeTripMember, deleteTrip, addTripContribution, approveTripContribution, deleteTripContribution, updateTrip } from "@/lib/actions";
+import type { Trip, TripMember, TripContribution } from "@/lib/types";
 
 export default function TripDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -24,6 +24,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
 
   const [payOpen, setPayOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmTripDel, setConfirmTripDel] = useState(false);
   const [confirmKick, setConfirmKick] = useState<string | null>(null);
   const [confirmContribDel, setConfirmContribDel] = useState<string | null>(null);
@@ -63,6 +64,11 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
         <span className="pill bg-card2 text-sub">
           <Icon name="wallet" size={13} /> {nameOf(trip.collector_id)} collects
         </span>
+        {(isCreator || isCollector) && (
+          <button className="text-sub p-1" onClick={() => setSettingsOpen(true)} aria-label="Trip settings">
+            <Icon name="gear" size={22} />
+          </button>
+        )}
       </div>
 
       {/* members + progress */}
@@ -92,7 +98,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
             <Icon name="plus" size={17} /> Add payment
           </button>
         )}
-        {isCreator && (
+        {(isCreator || isCollector) && (
           <button className="btn btn-secondary flex-1" onClick={() => setAddOpen(true)}>
             <Icon name="userPlus" size={17} /> Add person
           </button>
@@ -217,7 +223,41 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
           />
         </Sheet>
       )}
+
+      {settingsOpen && (
+        <TripSettingsSheet trip={trip} onClose={() => setSettingsOpen(false)} />
+      )}
     </div>
+  );
+}
+
+function TripSettingsSheet({ trip, onClose }: { trip: Trip; onClose: () => void }) {
+  const [name, setName] = useState(trip.name);
+  const [target, setTarget] = useState(String(trip.target_amount));
+  const [saving, setSaving] = useState(false);
+  const parsed = parseFloat(target.replace(/,/g, "")) || 0;
+  const valid = name.trim() && parsed > 0 && !saving;
+  return (
+    <Sheet title="Trip settings" onClose={onClose}>
+      <label className="section-title">Trip name</label>
+      <input className="input mb-4" value={name} onChange={(e) => setName(e.target.value)} />
+      <label className="section-title">Target each</label>
+      <div className="flex items-center gap-2 mb-6">
+        <span className="text-sub text-[15px] font-medium">Rs</span>
+        <input className="input" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value.replace(/[^\d.,]/g, ""))} />
+      </div>
+      <button
+        className="btn"
+        disabled={!valid}
+        onClick={async () => {
+          setSaving(true);
+          await updateTrip(trip, { name: name.trim(), target_amount: parsed });
+          onClose();
+        }}
+      >
+        Save
+      </button>
+    </Sheet>
   );
 }
 

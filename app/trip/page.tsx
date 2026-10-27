@@ -1,85 +1,43 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { useLiveQuery } from "dexie-react-hooks";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { useTrips, useProfileMap } from "@/lib/hooks";
-import { db } from "@/lib/db";
 import { createTrip } from "@/lib/actions";
-import { formatMoney } from "@/lib/utils";
 import { Card, EmptyState } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
 import { UserPicker } from "@/components/UserPicker";
-import type { Trip, Profile } from "@/lib/types";
+import type { Profile } from "@/lib/types";
 
 export default function TripPage() {
-  const { session, profile } = useApp();
+  const { session } = useApp();
   const uid = session?.user.id;
-  const currency = profile?.currency ?? "PKR";
   const trips = useTrips(uid);
+  const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
 
-  if (!session) return null;
+  // There's only ever one trip — go straight to it.
+  useEffect(() => {
+    if (trips && trips.length > 0) router.replace(`/trip/${trips[0].id}`);
+  }, [trips, router]);
+
+  if (!session || trips === undefined || trips.length > 0) return null;
 
   return (
     <div className="screen px-5 pt-14">
       <div className="flex items-center justify-between mb-6">
         <h1 className="large-title">Trip</h1>
-        <button className="pill bg-tint text-white" onClick={() => setCreateOpen(true)}>
-          <Icon name="plus" size={14} /> New trip
-        </button>
       </div>
-
-      {trips.length === 0 ? (
-        <Card>
-          <EmptyState icon="send" title="No trip yet" hint="Start a trip fund — everyone saves toward their own target" />
-        </Card>
-      ) : (
-        trips.map((t) => <TripRow key={t.id} trip={t} uid={uid!} currency={currency} />)
-      )}
-
+      <Card>
+        <EmptyState icon="send" title="No trip yet" hint="Start a trip fund — everyone saves toward their own target" />
+      </Card>
+      <button className="btn mt-4" onClick={() => setCreateOpen(true)}>
+        <Icon name="plus" size={17} /> Create the trip
+      </button>
       {createOpen && <CreateTripSheet uid={uid!} onClose={() => setCreateOpen(false)} />}
     </div>
-  );
-}
-
-function TripRow({ trip, uid, currency }: { trip: Trip; uid: string; currency: string }) {
-  const info = useLiveQuery(
-    async () => {
-      const members = await db().trip_members.where("trip_id").equals(trip.id).toArray();
-      return {
-        count: members.length,
-        mine: members.find((m) => m.user_id === uid)?.paid_amount ?? 0,
-        done: members.filter((m) => trip.target_amount > 0 && m.paid_amount >= trip.target_amount).length,
-      };
-    },
-    [trip.id, uid, trip.target_amount]
-  );
-
-  const pct = trip.target_amount ? Math.min(100, ((info?.mine ?? 0) / trip.target_amount) * 100) : 0;
-
-  return (
-    <Link href={`/trip/${trip.id}`}>
-      <Card className="card-pad mb-3">
-        <div className="flex justify-between items-start mb-1">
-          <div className="min-w-0">
-            <p className="text-[17px] font-semibold truncate">{trip.name}</p>
-            <p className="text-sub text-[13px] mt-0.5">
-              {info ? `${info.count} ${info.count === 1 ? "person" : "people"} · ${info.done} done` : "…"}
-            </p>
-          </div>
-          <p className="text-[14px] font-semibold tabular-nums shrink-0 ml-3">
-            {formatMoney(info?.mine ?? 0, currency)}
-            <span className="text-sub font-medium"> / {trip.target_amount.toLocaleString("en-PK")}</span>
-          </p>
-        </div>
-        <div className="progress-track mt-2">
-          <div className="progress-fill" style={{ width: `${pct}%`, background: "var(--color-tint)" }} />
-        </div>
-      </Card>
-    </Link>
   );
 }
 

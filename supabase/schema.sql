@@ -331,17 +331,19 @@ create policy settlements_read on public.settlements for select to authenticated
 create policy trips_read on public.trips for select to authenticated
   using (public.is_trip_member(id) or created_by = auth.uid());
 create policy trips_insert on public.trips for insert to authenticated
-  with check (created_by = auth.uid());
+  with check (created_by = auth.uid() and not exists (select 1 from public.trips));
 create policy trips_update on public.trips for update to authenticated
   using (created_by = auth.uid() or collector_id = auth.uid());
 create policy trips_delete on public.trips for delete to authenticated
   using (created_by = auth.uid());
 
--- trip_members: members read; creator adds; remove self or creator removes
+-- trip_members: members read; creator or collector adds; remove self or creator removes
 create policy trip_members_read on public.trip_members for select to authenticated
   using (public.is_trip_member(trip_id));
 create policy trip_members_insert on public.trip_members for insert to authenticated
-  with check (exists (select 1 from public.trips t where t.id = trip_id and t.created_by = auth.uid()));
+  with check (exists (select 1 from public.trips t
+    where t.id = trip_id
+      and (t.created_by = auth.uid() or t.collector_id = auth.uid())));
 create policy trip_members_delete on public.trip_members for delete to authenticated
   using (user_id = auth.uid()
          or exists (select 1 from public.trips t where t.id = trip_id and t.created_by = auth.uid()));

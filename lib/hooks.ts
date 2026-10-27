@@ -170,7 +170,7 @@ export function useTrips(userId?: string) {
       ) as NonNullable<(typeof trips)[number]>[];
     },
     [userId],
-    [] as Trip[]
+    undefined
   );
 }
 
