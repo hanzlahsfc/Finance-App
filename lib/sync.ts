@@ -334,6 +334,7 @@ async function applyRealtime(
 // ---------- lifecycle ----------
 
 export async function initSync(userId: string): Promise<void> {
+  if (currentUserId === userId) return;
   currentUserId = userId;
   if (!initialized) {
     initialized = true;

@@ -75,7 +75,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function boot(s: Session | null) {
-      if (s) await initSync(s.user.id);
+      // Don't await sync — pages render from IndexedDB instantly while
+      // flush/pullAll run in the background.
+      if (s) void initSync(s.user.id);
       if (!cancelled) {
         setSession(s);
         setReady(true);

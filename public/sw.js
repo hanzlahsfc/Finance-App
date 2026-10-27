@@ -40,8 +40,27 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Navigations & everything else: network-first, fall back to cache so the
-  // app still opens with no connection.
+  // Navigations: serve the cached shell instantly (stale-while-revalidate);
+  // the fresh copy lands in cache for the next open.
+  if (e.request.mode === "navigate") {
+    e.respondWith(
+      caches.match(e.request).then((hit) => {
+        const fresh = fetch(e.request)
+          .then((res) => {
+            if (res.ok) {
+              const copy = res.clone();
+              caches.open(VERSION).then((c) => c.put(e.request, copy));
+            }
+            return res;
+          })
+          .catch(() => null);
+        return hit || fresh.then((r) => r || caches.match("/"));
+      })
+    );
+    return;
+  }
+
+  // Everything else: network-first, fall back to cache.
   e.respondWith(
     fetch(e.request)
       .then((res) => {
@@ -54,7 +73,6 @@ self.addEventListener("fetch", (e) => {
       .catch(async () => {
         const hit = await caches.match(e.request);
         if (hit) return hit;
-        if (e.request.mode === "navigate") return caches.match("/");
         return Response.error();
       })
   );
