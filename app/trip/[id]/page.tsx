@@ -55,7 +55,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="screen px-5 pt-14">
       {/* header — non-owners live here, so no back button for them */}
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center gap-3 mb-1">
         {isOwner && (
           <button onClick={() => router.back()} className="text-tint p-1 -ml-1" aria-label="Back">
             <Icon name="chevronLeft" size={26} />
@@ -64,20 +64,20 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
         <div className="flex-1 min-w-0">
           <h1 className="text-[26px] font-bold truncate">{trip.name}</h1>
         </div>
-        {!isOwner && (
-          <Link href="/settings" aria-label="Settings">
-            <Avatar name={profile?.display_name ?? "?"} id={uid!} size={30} src={profile?.avatar_url} />
-          </Link>
-        )}
-        <span className="pill bg-card2 text-sub">
-          <Icon name="wallet" size={13} /> {nameOf(trip.collector_id)} collects
-        </span>
         {(isCreator || isCollector) && (
           <button className="text-sub p-1" onClick={() => setSettingsOpen(true)} aria-label="Trip settings">
             <Icon name="gear" size={22} />
           </button>
         )}
+        {!isOwner && (
+          <Link href="/settings" aria-label="Profile & settings">
+            <Avatar name={profile?.display_name ?? "?"} id={uid!} size={34} src={profile?.avatar_url} />
+          </Link>
+        )}
       </div>
+      <p className="text-sub text-[14px] mb-5 flex items-center gap-1.5">
+        <Icon name="wallet" size={14} /> {nameOf(trip.collector_id)} collects the money
+      </p>
 
       {/* trip total hero */}
       {(() => {
@@ -311,7 +311,7 @@ function MemberRow({
   const done = target > 0 && m.paid_amount >= target;
   const pct = target ? Math.min(100, (m.paid_amount / target) * 100) : 0;
   return (
-    <div className="list-row !flex-col !items-stretch gap-2">
+    <div className="list-row !flex-col !items-stretch gap-1.5">
       <div className="flex items-center gap-3">
         <Avatar name={name} id={m.user_id} size={38} src={avatarUrl} />
         <div className="flex-1 min-w-0">
@@ -319,30 +319,30 @@ function MemberRow({
             {name}
             {isCollector && <span className="text-sub text-[12px]"> · collector</span>}
           </div>
-          <div className="progress-track mt-1.5" style={{ width: 110 }}>
-            <div
-              className="progress-fill"
-              style={{ width: `${pct}%`, background: done ? "var(--color-green)" : "var(--color-tint)" }}
-            />
-          </div>
         </div>
-        <div className="text-right flex items-center gap-2">
-          {done && <span className="pill bg-[rgba(48,209,88,0.15)] text-green"><Icon name="check" size={12} /> Done</span>}
-          <p className="text-[15px] font-semibold tabular-nums">
-            {formatMoney(m.paid_amount, currency)}
-            <span className="text-sub text-[12px] font-medium"> / {target.toLocaleString("en-PK")}</span>
-          </p>
-          {canKick &&
-            (confirming ? (
-              <button className="pill text-red" style={{ background: "rgba(255,69,58,0.15)" }} onClick={onKick}>
-                Remove?
-              </button>
-            ) : (
-              <button aria-label={`Remove ${name}`} className="text-sub2 p-1" onClick={onConfirmKick}>
-                <Icon name="x" size={15} />
-              </button>
-            ))}
+        {done && <span className="pill bg-[rgba(48,209,88,0.15)] text-green shrink-0"><Icon name="check" size={12} /> Done</span>}
+        {canKick &&
+          (confirming ? (
+            <button className="pill text-red shrink-0" style={{ background: "rgba(255,69,58,0.15)" }} onClick={onKick}>
+              Remove?
+            </button>
+          ) : (
+            <button aria-label={`Remove ${name}`} className="text-sub2 p-1 shrink-0" onClick={onConfirmKick}>
+              <Icon name="x" size={15} />
+            </button>
+          ))}
+      </div>
+      <div className="flex items-center gap-3 pl-[50px]">
+        <div className="progress-track flex-1">
+          <div
+            className="progress-fill"
+            style={{ width: `${pct}%`, background: done ? "var(--color-green)" : "var(--color-tint)" }}
+          />
         </div>
+        <p className="text-[14px] font-semibold tabular-nums shrink-0">
+          {formatMoney(m.paid_amount, currency)}
+          <span className="text-sub text-[12px] font-medium"> / {target.toLocaleString("en-PK")}</span>
+        </p>
       </div>
     </div>
   );
