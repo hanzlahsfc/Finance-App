@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useApp, useSyncState } from "@/lib/store";
 import { useTransactions, useWeekTransactions, useIncome, useBills, useBillPayments, billPaidThisPeriod, useGroups, useOwedToMe, todaySpend } from "@/lib/hooks";
-import { formatMoney, weekKey, formatDayLabel } from "@/lib/utils";
+import { formatMoney, weekKey, formatDayLabel, OBLIGATIONS_USERNAME } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState, EyeToggle } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { categoryById } from "@/lib/categories";
@@ -32,7 +34,13 @@ export default function Home() {
   const left = pay - setAside - spent;
   const billsDue = bills.filter((b) => !billPaidThisPeriod(b, payments));
 
-  if (!session) return null;
+  // Everyone except the owner only gets the trip — home redirects there.
+  const router = useRouter();
+  useEffect(() => {
+    if (profile && profile.username !== OBLIGATIONS_USERNAME) router.replace("/trip");
+  }, [profile, router]);
+
+  if (!session || (profile && profile.username !== OBLIGATIONS_USERNAME)) return null;
 
   return (
     <div className="screen px-5 pt-14">

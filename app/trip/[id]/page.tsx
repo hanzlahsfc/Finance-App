@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { useTrip, useProfileMap } from "@/lib/hooks";
-import { formatMoney, formatDayLabel, toISODate } from "@/lib/utils";
+import { formatMoney, formatDayLabel, toISODate, OBLIGATIONS_USERNAME } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
@@ -40,6 +40,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   const { trip, members, contributions } = data;
+  const isOwner = profile?.username === OBLIGATIONS_USERNAME;
   const isCollector = trip.collector_id === uid;
   const isCreator = trip.created_by === uid;
   const isMember = members.some((m) => m.user_id === uid);
@@ -53,14 +54,21 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="screen px-5 pt-14">
-      {/* header */}
+      {/* header — non-owners live here, so no back button for them */}
       <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => router.back()} className="text-tint p-1 -ml-1" aria-label="Back">
-          <Icon name="chevronLeft" size={26} />
-        </button>
+        {isOwner && (
+          <button onClick={() => router.back()} className="text-tint p-1 -ml-1" aria-label="Back">
+            <Icon name="chevronLeft" size={26} />
+          </button>
+        )}
         <div className="flex-1 min-w-0">
           <h1 className="text-[26px] font-bold truncate">{trip.name}</h1>
         </div>
+        {!isOwner && (
+          <Link href="/settings" aria-label="Settings">
+            <Avatar name={profile?.display_name ?? "?"} id={uid!} size={30} src={profile?.avatar_url} />
+          </Link>
+        )}
         <span className="pill bg-card2 text-sub">
           <Icon name="wallet" size={13} /> {nameOf(trip.collector_id)} collects
         </span>
@@ -70,6 +78,31 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
           </button>
         )}
       </div>
+
+      {/* trip total hero */}
+      {(() => {
+        const totalPaid = members.reduce((s, m) => s + m.paid_amount, 0);
+        const totalTarget = trip.target_amount * members.length;
+        const doneCount = members.filter((m) => trip.target_amount > 0 && m.paid_amount >= trip.target_amount).length;
+        return (
+          <Card className="card-pad mb-6 text-center">
+            <p className="text-[12px] text-sub uppercase tracking-wide mb-1">Collected so far</p>
+            <p className="amount-hero">{formatMoney(totalPaid, currency)}</p>
+            <p className="text-sub text-[13px] mb-4">
+              of {formatMoney(totalTarget, currency)} · {doneCount} of {members.length} done
+            </p>
+            <div className="progress-track">
+              <div
+                className="progress-fill"
+                style={{
+                  width: `${totalTarget ? Math.min(100, (totalPaid / totalTarget) * 100) : 0}%`,
+                  background: "linear-gradient(90deg, var(--color-tint), var(--color-purple))",
+                }}
+              />
+            </div>
+          </Card>
+        );
+      })()}
 
       {/* members + progress */}
       <SectionTitle>Everyone&apos;s progress</SectionTitle>

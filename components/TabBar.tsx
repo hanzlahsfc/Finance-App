@@ -15,8 +15,6 @@ const TABS = [
   { href: "/groups", label: "Friends", icon: "people" as const },
 ];
 
-const TRIP_TAB = { href: "/trip", label: "Trip", icon: "send" as const };
-
 const HIDE_ON = ["/login", "/onboarding", "/auth/callback"];
 
 export function TabBar() {
@@ -26,7 +24,10 @@ export function TabBar() {
 
   if (HIDE_ON.some((p) => pathname.startsWith(p)) || !session) return null;
 
-  const tabs = profile?.username === OBLIGATIONS_USERNAME ? TABS : [...TABS.slice(0, 2), TRIP_TAB, TABS[3]];
+  // Everyone except the owner gets a single-purpose app: the trip.
+  if (profile && profile.username !== OBLIGATIONS_USERNAME) return null;
+
+  const tabs = TABS;
 
   return (
     <>
