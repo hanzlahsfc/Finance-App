@@ -21,6 +21,9 @@ import type {
   Trip,
   TripMember,
   TripContribution,
+  Committee,
+  CommitteeMember,
+  CommitteePayment,
 } from "./types";
 
 // ---------- transactions ----------
@@ -291,10 +294,22 @@ export async function deleteSplit(id: string) {
 }
 
 export async function deleteActivity(activityId: string) {
+  const activity = await db().activities.get(activityId);
   // cascades server-side; locally remove children too
   await db().activity_splits.where("activity_id").equals(activityId).delete();
   await db().settlements.where("activity_id").equals(activityId).delete();
   await enqueue("activities", "delete", { id: activityId });
+  // ad-hoc split groups die with their last activity
+  if (activity) {
+    const g = await db().groups.get(activity.group_id);
+    if (g?.is_adhoc) {
+      const remaining = await db().activities.where("group_id").equals(g.id).count();
+      if (remaining === 0) {
+        await db().group_members.where("group_id").equals(g.id).delete();
+        await enqueue("groups", "delete", { id: g.id });
+      }
+    }
+  }
 }
 
 export async function transferActivityAdmin(activity: Activity, newAdminId: string) {
@@ -556,6 +571,118 @@ export async function deleteTripContribution(c: TripContribution) {
     const m = await db().trip_members.get([c.trip_id, c.user_id]);
     if (m) await db().trip_members.put({ ...m, paid_amount: Math.max(0, m.paid_amount - c.amount) });
   }
+}
+
+// ---------- committee (rotating monthly pot) ----------
+
+export async function createCommittee(input: {
+  created_by: string;
+  name: string;
+  amount: number;
+  collector_id: string;
+  start_month: string; // yyyy-mm-01
+  member_ids: string[]; // ordered — index+1 becomes the payout position
+}) {
+  const committee: Committee = {
+    id: uuid(),
+    name: input.name.trim(),
+    amount: input.amount,
+    created_by: input.created_by,
+    collector_id: input.collector_id,
+    start_month: input.start_month,
+  };
+  const memberIds = [...new Set([input.created_by, input.collector_id, ...input.member_ids])];
+  const members: CommitteeMember[] = memberIds.map((uid, i) => ({
+    committee_id: committee.id,
+    user_id: uid,
+    position: i + 1,
+    added_by: input.created_by,
+  }));
+  await db().committees.put(committee);
+  await db().committee_members.bulkPut(members);
+  await enqueue("committees", "insert", { ...committee, localRow: committee });
+  for (const m of members) {
+    await db().outbox.add({
+      op_id: uuid(), table: "committee_members", action: "insert",
+      payload: { committee_id: m.committee_id, user_id: m.user_id, position: m.position, added_by: m.added_by, localRow: m },
+      created_at: Date.now(), attempts: 0,
+    });
+  }
+  void flush();
+  return committee.id;
+}
+
+export async function updateCommittee(c: Committee, patch: Partial<Pick<Committee, "name" | "amount" | "collector_id" | "start_month">>) {
+  const merged = { ...c, ...patch };
+  await enqueue("committees", "update", { id: c.id, localRow: merged, localPatch: patch });
+}
+
+export async function addCommitteeMember(committeeId: string, userId: string, addedBy: string) {
+  const existing = await db().committee_members.where("committee_id").equals(committeeId).toArray();
+  const position = existing.reduce((mx, m) => Math.max(mx, m.position), 0) + 1;
+  const m: CommitteeMember = { committee_id: committeeId, user_id: userId, position, added_by: addedBy };
+  await enqueue("committee_members", "insert", {
+    committee_id: committeeId, user_id: userId, position, added_by: addedBy, localRow: m,
+  });
+}
+
+export async function removeCommitteeMember(committeeId: string, userId: string) {
+  await enqueue("committee_members", "delete", { committee_id: committeeId, user_id: userId });
+}
+
+export async function deleteCommittee(id: string) {
+  await db().committee_members.where("committee_id").equals(id).delete();
+  await db().committee_payments.where("committee_id").equals(id).delete();
+  await db().committee_payouts.where("committee_id").equals(id).delete();
+  await enqueue("committees", "delete", { id });
+}
+
+/** Member logs this month's payment — pending until the collector confirms. */
+export async function addCommitteePayment(input: {
+  committee_id: string;
+  user_id: string;
+  month: number;
+  amount: number;
+  paid_at?: string;
+}) {
+  const row: CommitteePayment = {
+    id: uuid(),
+    committee_id: input.committee_id,
+    user_id: input.user_id,
+    month: input.month,
+    amount: input.amount,
+    status: "pending",
+    paid_at: input.paid_at ?? new Date().toISOString(),
+    received_at: null,
+  };
+  await enqueue("committee_payments", "insert", { ...row, localRow: row });
+  return row.id;
+}
+
+export async function approveCommitteePayment(p: CommitteePayment) {
+  const merged: CommitteePayment = { ...p, status: "received", received_at: new Date().toISOString() };
+  await enqueue("committee_payments", "update", {
+    id: p.id, localRow: merged,
+    localPatch: { status: "received", received_at: merged.received_at },
+  });
+}
+
+export async function deleteCommitteePayment(p: CommitteePayment) {
+  await enqueue("committee_payments", "delete", { id: p.id });
+}
+
+/** Collector marks the month's pot as handed to the recipient. */
+export async function markPotPaid(committeeId: string, month: number) {
+  const row = { id: uuid(), committee_id: committeeId, month, paid_at: new Date().toISOString() };
+  await enqueue("committee_payouts", "insert", { ...row, localRow: row });
+}
+
+export async function unmarkPotPaid(committeeId: string, month: number) {
+  const row = await db()
+    .committee_payouts.where("committee_id").equals(committeeId)
+    .filter((p) => p.month === month)
+    .first();
+  if (row) await enqueue("committee_payouts", "delete", { id: row.id });
 }
 
 /** Resize a photo client-side and push it to the avatars bucket. */

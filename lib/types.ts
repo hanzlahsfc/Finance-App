@@ -191,3 +191,41 @@ export interface TripContribution {
   paid_at: string;
   received_at: string | null;
 }
+
+// ---------- committee (rotating monthly pot) ----------
+
+export interface Committee {
+  id: string;
+  name: string;
+  amount: number;
+  created_by: string;
+  collector_id: string;
+  start_month: string; // yyyy-mm-01
+  created_at?: string;
+}
+
+export interface CommitteeMember {
+  committee_id: string;
+  user_id: string;
+  position: number;
+  added_by?: string | null;
+  added_at?: string;
+}
+
+export interface CommitteePayment {
+  id: string;
+  committee_id: string;
+  user_id: string;
+  month: number;
+  amount: number;
+  status: "pending" | "received";
+  paid_at: string;
+  received_at: string | null;
+}
+
+export interface CommitteePayout {
+  id: string;
+  committee_id: string;
+  month: number;
+  paid_at: string;
+}

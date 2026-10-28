@@ -174,6 +174,9 @@ function AdhocSplitRow({ group, uid, profileMap, currency }: { group: Group; uid
     [group.id]
   );
 
+  // hide deleted splits — an ad-hoc group with no activity is gone
+  if (info === null) return null;
+
   return (
     <Link href={`/groups/${group.id}`}>
       <ListRow

@@ -71,6 +71,15 @@ export default function SettingsPage() {
                 right={<Icon name="chevronRight" size={16} className="text-sub2" />}
               />
             </Link>
+            <Link href="/committee">
+              <ListRow
+                icon="coins"
+                iconBg="rgba(255,159,10,0.15)"
+                title="Committee"
+                subtitle="Monthly rotating pot"
+                right={<Icon name="chevronRight" size={16} className="text-sub2" />}
+              />
+            </Link>
           </Card>
         </>
       )}

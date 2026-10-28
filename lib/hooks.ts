@@ -3,7 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "./db";
 import { startOfWeek, endOfWeek, toISODate, billPeriodStart } from "./utils";
-import type { Profile, Transaction, Bill, BillPayment, Obligation, SavingsGoal, Plan, Trip } from "./types";
+import type { Profile, Transaction, Bill, BillPayment, Obligation, SavingsGoal, Plan, Trip, Committee } from "./types";
 
 export function useTransactions(userId?: string) {
   return useLiveQuery(
@@ -189,6 +189,46 @@ export function useTrip(tripId?: string) {
     [tripId],
     null
   );
+}
+
+export function useCommittees(userId?: string) {
+  return useLiveQuery(
+    async () => {
+      if (!userId) return [];
+      const mems = await db().committee_members.where("user_id").equals(userId).toArray();
+      const rows = await db().committees.bulkGet(mems.map((m) => m.committee_id));
+      return rows.filter(Boolean).sort(
+        (a, b) => (b!.created_at ?? "").localeCompare(a!.created_at ?? "")
+      ) as NonNullable<(typeof rows)[number]>[];
+    },
+    [userId],
+    [] as Committee[]
+  );
+}
+
+export function useCommittee(committeeId?: string) {
+  return useLiveQuery(
+    async () => {
+      if (!committeeId) return null;
+      const [committee, members, payments, payouts] = await Promise.all([
+        db().committees.get(committeeId),
+        db().committee_members.where("committee_id").equals(committeeId).toArray(),
+        db().committee_payments.where("committee_id").equals(committeeId).toArray(),
+        db().committee_payouts.where("committee_id").equals(committeeId).toArray(),
+      ]);
+      members.sort((a, b) => a.position - b.position);
+      payments.sort((a, b) => b.paid_at.localeCompare(a.paid_at));
+      return { committee: committee ?? null, members, payments, payouts };
+    },
+    [committeeId],
+    null
+  );
+}
+
+/** 1-based month index of the committee rotation for a given date. */
+export function committeeMonth(startMonth: string, ref = new Date()): number {
+  const s = new Date(startMonth);
+  return (ref.getFullYear() - s.getFullYear()) * 12 + (ref.getMonth() - s.getMonth()) + 1;
 }
 
 /** Per-friend shared-event stats: event count and balances across all groups. */

@@ -18,6 +18,10 @@ import type {
   Trip,
   TripMember,
   TripContribution,
+  Committee,
+  CommitteeMember,
+  CommitteePayment,
+  CommitteePayout,
 } from "./types";
 
 export interface OutboxItem {
@@ -50,6 +54,10 @@ class HisabDB extends Dexie {
   trips!: Table<Trip, string>;
   trip_members!: Table<TripMember, [string, string]>;
   trip_contributions!: Table<TripContribution, string>;
+  committees!: Table<Committee, string>;
+  committee_members!: Table<CommitteeMember, [string, string]>;
+  committee_payments!: Table<CommitteePayment, string>;
+  committee_payouts!: Table<CommitteePayout, string>;
   outbox!: Table<OutboxItem, number>;
   meta!: Table<{ key: string; value: string }, string>;
 
@@ -80,6 +88,12 @@ class HisabDB extends Dexie {
       trips: "id",
       trip_members: "[trip_id+user_id], trip_id, user_id",
       trip_contributions: "id, trip_id, user_id",
+    });
+    this.version(6).stores({
+      committees: "id",
+      committee_members: "[committee_id+user_id], committee_id, user_id",
+      committee_payments: "id, committee_id, user_id",
+      committee_payouts: "id, committee_id",
     });
   }
 }

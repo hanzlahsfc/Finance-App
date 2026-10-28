@@ -4,7 +4,7 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
-import { useTrip, useProfileMap } from "@/lib/hooks";
+import { useTrip, useProfileMap, useCommittees } from "@/lib/hooks";
 import { formatMoney, formatDayLabel, toISODate, OBLIGATIONS_USERNAME } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
@@ -21,6 +21,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
   const currency = profile?.currency ?? "PKR";
   const data = useTrip(id);
   const profileMap = useProfileMap();
+  const committees = useCommittees(uid);
 
   const [payOpen, setPayOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -218,6 +219,26 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
                 />
               ))
             )}
+          </Card>
+        </>
+      )}
+
+      {/* committee shortcut — members jump straight in from the trip app */}
+      {committees.length > 0 && (
+        <>
+          <SectionTitle>Committee</SectionTitle>
+          <Card className="mb-5">
+            {committees.map((c) => (
+              <Link href={`/committee/${c.id}`} key={c.id}>
+                <ListRow
+                  icon="coins"
+                  iconBg="rgba(255,159,10,0.15)"
+                  title={c.name}
+                  subtitle="Monthly rotating pot"
+                  right={<Icon name="chevronRight" size={16} className="text-sub2" />}
+                />
+              </Link>
+            ))}
           </Card>
         </>
       )}
