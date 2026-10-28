@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { useCommittees, useProfileMap } from "@/lib/hooks";
@@ -21,7 +20,12 @@ export default function CommitteePage() {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
 
-  if (!session) return null;
+  // There's only ever one committee — go straight to it.
+  useEffect(() => {
+    if (committees.length > 0) router.replace(`/committee/${committees[0].id}`);
+  }, [committees, router]);
+
+  if (!session || committees.length > 0) return null;
 
   return (
     <div className="screen px-5 pt-14">
@@ -30,30 +34,14 @@ export default function CommitteePage() {
           <Icon name="chevronLeft" size={26} />
         </button>
         <h1 className="large-title flex-1">Committee</h1>
-        <button className="pill bg-tint text-white" onClick={() => setCreateOpen(true)}>
-          <Icon name="plus" size={14} /> New
-        </button>
       </div>
 
-      {committees.length === 0 ? (
-        <Card>
-          <EmptyState icon="coins" title="No committee yet" hint="Monthly rotating pot — everyone pays, one person collects each month" />
-        </Card>
-      ) : (
-        <Card className="mb-6">
-          {committees.map((c) => (
-            <Link href={`/committee/${c.id}`} key={c.id}>
-              <ListRow
-                icon="coins"
-                iconBg="rgba(0,200,83,0.15)"
-                title={c.name}
-                subtitle={`${formatMoney(c.amount, currency)} / month each`}
-                right={<Icon name="chevronRight" size={16} className="text-sub2" />}
-              />
-            </Link>
-          ))}
-        </Card>
-      )}
+      <Card>
+        <EmptyState icon="coins" title="No committee yet" hint="Monthly rotating pot — everyone pays, one person collects each month" />
+      </Card>
+      <button className="btn mt-4" onClick={() => setCreateOpen(true)}>
+        <Icon name="plus" size={17} /> Create the committee
+      </button>
 
       {createOpen && <CreateCommitteeSheet uid={uid!} onClose={() => setCreateOpen(false)} />}
     </div>

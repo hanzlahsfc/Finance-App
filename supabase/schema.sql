@@ -419,7 +419,7 @@ create policy trip_contrib_delete on public.trip_contributions for delete to aut
 create policy committees_read on public.committees for select to authenticated
   using (public.is_committee_member(id) or created_by = auth.uid());
 create policy committees_insert on public.committees for insert to authenticated
-  with check (created_by = auth.uid());
+  with check (created_by = auth.uid() and not exists (select 1 from public.committees));
 create policy committees_update on public.committees for update to authenticated
   using (created_by = auth.uid() or collector_id = auth.uid());
 create policy committees_delete on public.committees for delete to authenticated
@@ -432,6 +432,9 @@ create policy committee_members_insert on public.committee_members for insert to
   with check (exists (select 1 from public.committees c
     where c.id = committee_id
       and (c.created_by = auth.uid() or c.collector_id = auth.uid())));
+create policy committee_members_update on public.committee_members for update to authenticated
+  using (exists (select 1 from public.committees c where c.id = committee_id and c.created_by = auth.uid()))
+  with check (exists (select 1 from public.committees c where c.id = committee_id and c.created_by = auth.uid()));
 create policy committee_members_delete on public.committee_members for delete to authenticated
   using (user_id = auth.uid()
          or exists (select 1 from public.committees c where c.id = committee_id and c.created_by = auth.uid()));

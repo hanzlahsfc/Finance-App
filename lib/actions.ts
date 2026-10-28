@@ -630,6 +630,31 @@ export async function removeCommitteeMember(committeeId: string, userId: string)
   await enqueue("committee_members", "delete", { committee_id: committeeId, user_id: userId });
 }
 
+/** Admin reorders payout positions. Two passes avoid unique(committee_id, position) collisions. */
+export async function reorderCommitteeMembers(committeeId: string, orderedUserIds: string[]) {
+  const members = await db().committee_members.where("committee_id").equals(committeeId).toArray();
+  const byId = new Map(members.map((m) => [m.user_id, m]));
+  const reordered = orderedUserIds
+    .map((uid, i) => ({ ...byId.get(uid)!, position: i + 1 }))
+    .filter((m) => m.user_id);
+  await db().committee_members.bulkPut(reordered);
+  for (const m of reordered) {
+    await db().outbox.add({
+      op_id: uuid(), table: "committee_members", action: "update",
+      payload: { committee_id: m.committee_id, user_id: m.user_id, localPatch: { position: m.position + 10000 } },
+      created_at: Date.now(), attempts: 0,
+    });
+  }
+  for (const m of reordered) {
+    await db().outbox.add({
+      op_id: uuid(), table: "committee_members", action: "update",
+      payload: { committee_id: m.committee_id, user_id: m.user_id, localPatch: { position: m.position } },
+      created_at: Date.now(), attempts: 0,
+    });
+  }
+  void flush();
+}
+
 export async function deleteCommittee(id: string) {
   await db().committee_members.where("committee_id").equals(id).delete();
   await db().committee_payments.where("committee_id").equals(id).delete();

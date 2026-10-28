@@ -10,7 +10,7 @@ import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
 import { UserPicker } from "@/components/UserPicker";
 import {
-  addCommitteeMember, removeCommitteeMember, deleteCommittee, updateCommittee,
+  addCommitteeMember, removeCommitteeMember, reorderCommitteeMembers, deleteCommittee, updateCommittee,
   addCommitteePayment, approveCommitteePayment, deleteCommitteePayment,
   markPotPaid, unmarkPotPaid,
 } from "@/lib/actions";
@@ -31,6 +31,7 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
   const [confirmDel, setConfirmDel] = useState(false);
   const [confirmKick, setConfirmKick] = useState<string | null>(null);
   const [confirmPayDel, setConfirmPayDel] = useState<string | null>(null);
+  const [reorderOpen, setReorderOpen] = useState(false);
 
   if (!session) return null;
   if (!data || !data.committee) {
@@ -118,7 +119,14 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
       </div>
 
       {/* rotation */}
-      <SectionTitle>Payout order</SectionTitle>
+      <div className="flex items-center justify-between px-1 mb-2">
+        <span className="section-title !mb-0">Payout order</span>
+        {isCreator && (
+          <button className="text-tint text-[14px] font-medium" onClick={() => setReorderOpen(true)}>
+            Edit order
+          </button>
+        )}
+      </div>
       <Card className="mb-6">
         {members.map((m) => {
           const mMonth = ((m.position - 1) % n) + 1 + Math.floor((month - 1) / n) * n;
@@ -226,10 +234,67 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
         </Sheet>
       )}
 
+      {reorderOpen && (
+        <ReorderSheet members={members} uid={uid!} nameOf={nameOf} onClose={() => setReorderOpen(false)} />
+      )}
+
       {settingsOpen && (
-        <CommitteeSettingsSheet committee={committee} onClose={() => setSettingsOpen(false)} />
+        <CommitteeSettingsSheet committee={committee} members={members} uid={uid!} nameOf={nameOf} onClose={() => setSettingsOpen(false)} />
       )}
     </div>
+  );
+}
+
+function ReorderSheet({ members, uid, nameOf, onClose }: {
+  members: CommitteeMember[];
+  uid: string;
+  nameOf: (id: string) => string;
+  onClose: () => void;
+}) {
+  const [order, setOrder] = useState(members.map((m) => m.user_id));
+  const [saving, setSaving] = useState(false);
+  const profileMap = useProfileMap();
+
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= order.length) return;
+    const o = [...order];
+    [o[i], o[j]] = [o[j], o[i]];
+    setOrder(o);
+  };
+
+  return (
+    <Sheet title="Edit payout order" onClose={onClose}>
+      <p className="text-sub text-[13px] mb-3 px-1">Who takes the pot each month, top to bottom.</p>
+      <div className="card mb-5">
+        {order.map((id, i) => (
+          <div key={id} className="list-row">
+            <span className="text-[15px] font-bold text-sub w-5 text-center shrink-0">{i + 1}</span>
+            <Avatar name={nameOf(id)} id={id} size={32} src={profileMap.get(id)?.avatar_url} />
+            <div className="flex-1 min-w-0 text-[15px] font-medium truncate">{nameOf(id)}</div>
+            <div className="flex gap-1 shrink-0">
+              <button aria-label="Move up" className="text-sub2 p-1.5" disabled={i === 0} onClick={() => move(i, -1)}>
+                <Icon name="chevronDown" size={16} style={{ transform: "rotate(180deg)" }} />
+              </button>
+              <button aria-label="Move down" className="text-sub2 p-1.5" disabled={i === order.length - 1} onClick={() => move(i, 1)}>
+                <Icon name="chevronDown" size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <button
+        className="btn"
+        disabled={saving}
+        onClick={async () => {
+          setSaving(true);
+          await reorderCommitteeMembers(members[0].committee_id, order);
+          onClose();
+        }}
+      >
+        Save order
+      </button>
+    </Sheet>
   );
 }
 
@@ -312,9 +377,16 @@ function PaySheet({ committee, month, uid, currency, onClose }: {
   );
 }
 
-function CommitteeSettingsSheet({ committee, onClose }: { committee: Committee; onClose: () => void }) {
+function CommitteeSettingsSheet({ committee, members, uid, nameOf, onClose }: {
+  committee: Committee;
+  members: CommitteeMember[];
+  uid: string;
+  nameOf: (id: string) => string;
+  onClose: () => void;
+}) {
   const [name, setName] = useState(committee.name);
   const [amount, setAmount] = useState(String(committee.amount));
+  const [collector, setCollector] = useState(committee.collector_id);
   const [saving, setSaving] = useState(false);
   const parsed = parseFloat(amount.replace(/,/g, "")) || 0;
   const valid = name.trim() && parsed > 0 && !saving;
@@ -323,16 +395,28 @@ function CommitteeSettingsSheet({ committee, onClose }: { committee: Committee; 
       <label className="section-title">Name</label>
       <input className="input mb-4" value={name} onChange={(e) => setName(e.target.value)} />
       <label className="section-title">Monthly amount each</label>
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex items-center gap-2 mb-4">
         <span className="text-sub text-[15px] font-medium">Rs</span>
         <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))} />
+      </div>
+      <label className="section-title">Who collects the money?</label>
+      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6">
+        {members.map((m) => (
+          <button
+            key={m.user_id}
+            className={`pill shrink-0 ${collector === m.user_id ? "bg-tint text-white" : "bg-card2 text-sub"}`}
+            onClick={() => setCollector(m.user_id)}
+          >
+            {nameOf(m.user_id).split(" ")[0]}
+          </button>
+        ))}
       </div>
       <button
         className="btn"
         disabled={!valid}
         onClick={async () => {
           setSaving(true);
-          await updateCommittee(committee, { name: name.trim(), amount: parsed });
+          await updateCommittee(committee, { name: name.trim(), amount: parsed, collector_id: collector });
           onClose();
         }}
       >
