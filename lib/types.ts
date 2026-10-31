@@ -230,7 +230,7 @@ export interface CommitteePayout {
   paid_at: string;
 }
 
-export type BusinessKind = "income" | "expense" | "zakat";
+export type BusinessKind = "income" | "expense" | "zakat" | "draw";
 
 export interface BusinessEntry {
   id: string;
@@ -238,6 +238,7 @@ export interface BusinessEntry {
   kind: BusinessKind;
   amount: number;
   note: string;
+  income_id?: string | null;
   occurred_at: string;
   created_at?: string;
 }

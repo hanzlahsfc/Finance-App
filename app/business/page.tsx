@@ -5,7 +5,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useApp } from "@/lib/store";
 import { useBusinessEntries } from "@/lib/hooks";
 import { db } from "@/lib/db";
-import { addBusinessEntry, deleteBusinessEntry } from "@/lib/actions";
+import { addBusinessEntry, addBusinessDraw, deleteBusinessEntry } from "@/lib/actions";
 import { formatMoney, formatDayLabel, toISODate } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Segmented, EmptyState, EyeToggle } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
@@ -21,6 +21,7 @@ export default function BusinessPage() {
   const entries = useBusinessEntries(uid);
 
   const [addOpen, setAddOpen] = useState<"income" | "expense" | null>(null);
+  const [drawOpen, setDrawOpen] = useState(false);
   const [zakatOpen, setZakatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sel, setSel] = useState<BusinessEntry | null>(null);
@@ -31,7 +32,9 @@ export default function BusinessPage() {
   const income = entries.filter((e) => e.kind === "income").reduce((s, e) => s + e.amount, 0);
   const expense = entries.filter((e) => e.kind === "expense").reduce((s, e) => s + e.amount, 0);
   const zakatPaid = entries.filter((e) => e.kind === "zakat").reduce((s, e) => s + e.amount, 0);
+  const drawn = entries.filter((e) => e.kind === "draw").reduce((s, e) => s + e.amount, 0);
   const profit = income - expense;
+  const cash = profit - zakatPaid - drawn;
   const pct = parseFloat(zakatPct) || 15;
   const zakatDue = Math.max(0, Math.round((profit * pct) / 100 - zakatPaid));
 
@@ -54,6 +57,10 @@ export default function BusinessPage() {
         </div>
         <p className={`amount-hero mt-2 ${profit < 0 ? "text-red" : ""}`}>{formatMoney(Math.max(0, profit), currency)}</p>
         <p className="text-sub text-[13px] mb-4">income {formatMoney(income, currency)} · spent {formatMoney(expense, currency)}</p>
+        <p className="text-sub text-[13px] mb-3">
+          cash in business {formatMoney(Math.max(0, cash), currency)}
+          {drawn > 0 && <> · paid to me {formatMoney(drawn, currency)}</>}
+        </p>
         <div className="border-t border-card2 pt-3 flex items-center justify-between">
           <div>
             <p className="text-[12px] text-sub mb-0.5">Zakat ({pct}% of profit)</p>
@@ -67,7 +74,7 @@ export default function BusinessPage() {
       </Card>
 
       {/* add buttons */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 gap-3 mb-3">
         <button className="btn" onClick={() => setAddOpen("income")}>
           <Icon name="plus" size={17} /> Income
         </button>
@@ -75,6 +82,9 @@ export default function BusinessPage() {
           <Icon name="minus" size={17} /> Expense
         </button>
       </div>
+      <button className="btn btn-secondary w-full mb-6" onClick={() => setDrawOpen(true)}>
+        <Icon name="wallet" size={17} /> Pay myself → personal
+      </button>
 
       {/* entries */}
       <SectionTitle>Entries</SectionTitle>
@@ -85,10 +95,10 @@ export default function BusinessPage() {
           entries.map((e) => (
             <ListRow
               key={e.id}
-              icon={e.kind === "income" ? "chevronRight" : e.kind === "expense" ? "chevronLeft" : "heart"}
-              iconBg={e.kind === "income" ? "rgba(48,209,88,0.15)" : e.kind === "expense" ? "rgba(255,69,58,0.15)" : "rgba(94,229,200,0.15)"}
-              title={e.note || (e.kind === "zakat" ? "Zakat" : e.kind === "income" ? "Income" : "Expense")}
-              subtitle={formatDayLabel(e.occurred_at)}
+              icon={e.kind === "income" ? "chevronRight" : e.kind === "expense" ? "chevronLeft" : e.kind === "draw" ? "wallet" : "heart"}
+              iconBg={e.kind === "income" ? "rgba(48,209,88,0.15)" : e.kind === "expense" ? "rgba(255,69,58,0.15)" : e.kind === "draw" ? "rgba(100,181,246,0.15)" : "rgba(94,229,200,0.15)"}
+              title={e.note || (e.kind === "zakat" ? "Zakat" : e.kind === "draw" ? "Paid to me" : e.kind === "income" ? "Income" : "Expense")}
+              subtitle={e.kind === "draw" ? `${formatDayLabel(e.occurred_at)} · to personal` : formatDayLabel(e.occurred_at)}
               right={
                 <span className={`text-[15px] font-semibold tabular-nums ${e.kind === "income" ? "text-green" : e.kind === "zakat" ? "text-teal" : ""}`}>
                   {e.kind === "income" ? "+" : "−"}{formatMoney(e.amount, currency)}
@@ -101,13 +111,15 @@ export default function BusinessPage() {
       </Card>
 
       {addOpen && <AddSheet kind={addOpen} uid={uid!} onClose={() => setAddOpen(null)} />}
+      {drawOpen && <DrawSheet uid={uid!} cash={cash} currency={currency} onClose={() => setDrawOpen(false)} />}
       {zakatOpen && <ZakatSheet uid={uid!} due={zakatDue} currency={currency} onClose={() => setZakatOpen(false)} />}
       {settingsOpen && <ZakatSettings current={pct} onClose={() => setSettingsOpen(false)} />}
       {sel && (
         <Sheet title={sel.note || "Entry"} onClose={() => setSel(null)}>
           <div className="text-center py-4">
             <p className="text-[34px] font-bold tabular-nums">{formatMoney(sel.amount, currency)}</p>
-            <p className="text-sub text-[14px]">{sel.kind === "zakat" ? "Zakat" : sel.kind} · {formatDayLabel(sel.occurred_at)}</p>
+            <p className="text-sub text-[14px]">{sel.kind === "zakat" ? "Zakat" : sel.kind === "draw" ? "Paid to me" : sel.kind} · {formatDayLabel(sel.occurred_at)}</p>
+            {sel.kind === "draw" && <p className="text-sub2 text-[12px] mt-1">deleting removes the personal income entry too</p>}
           </div>
           <button className="btn btn-danger" onClick={async () => { await deleteBusinessEntry(sel.id); setSel(null); }}>
             <Icon name="trash" size={17} /> Delete
@@ -146,6 +158,40 @@ function AddSheet({ kind, uid, onClose }: { kind: "income" | "expense"; uid: str
       >
         Add {kind}
       </button>
+    </Sheet>
+  );
+}
+
+function DrawSheet({ uid, cash, currency, onClose }: { uid: string; cash: number; currency: string; onClose: () => void }) {
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [date, setDate] = useState(toISODate(new Date()));
+  const parsed = parseFloat(amount.replace(/,/g, "")) || 0;
+  return (
+    <Sheet title="Pay myself" onClose={onClose}>
+      <p className="text-sub text-[14px] text-center mt-1">Cash in business: {formatMoney(Math.max(0, cash), currency)}</p>
+      <div className="flex items-end justify-center gap-1 py-6">
+        <span className="text-[20px] font-semibold text-sub mb-1.5">Rs</span>
+        <input
+          className="bg-transparent outline-none text-[44px] font-bold w-[200px] text-center tabular-nums placeholder:text-card3"
+          placeholder="0" inputMode="decimal" autoFocus
+          value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))}
+        />
+      </div>
+      <input className="input mb-3" placeholder="Note — e.g. Monthly draw, expenses" value={note} onChange={(e) => setNote(e.target.value)} />
+      <label className="section-title">Date</label>
+      <input className="input mb-6" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <button
+        className="btn"
+        disabled={parsed <= 0 || !date}
+        onClick={async () => {
+          await addBusinessDraw({ user_id: uid, amount: parsed, note, occurred_at: new Date(date).toISOString() });
+          onClose();
+        }}
+      >
+        Move to personal income
+      </button>
+      <p className="text-sub2 text-[12px] text-center mt-3">Shows up in your Pay as &ldquo;{note.trim() || "Cemzlah"}&rdquo; — doesn&apos;t change profit or zakat.</p>
     </Sheet>
   );
 }

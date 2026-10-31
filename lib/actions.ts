@@ -739,7 +739,39 @@ export async function updateBusinessEntry(e: BusinessEntry, patch: Partial<Busin
 }
 
 export async function deleteBusinessEntry(id: string) {
+  const e = await db().business_entries.get(id);
+  if (e?.kind === "draw" && e.income_id) {
+    await enqueue("income_entries", "delete", { id: e.income_id });
+  }
   await enqueue("business_entries", "delete", { id });
+}
+
+/** Take money out of the business → shows up as personal income ("Cemzlah"). */
+export async function addBusinessDraw(input: {
+  user_id: string;
+  amount: number;
+  note: string;
+  occurred_at?: string;
+}) {
+  const d = new Date(input.occurred_at ?? new Date().toISOString());
+  const incomeId = await addIncome({
+    user_id: input.user_id,
+    kind: "other",
+    amount: input.amount,
+    label: input.note.trim() || "Cemzlah",
+    date: d,
+  });
+  const row: BusinessEntry = {
+    id: uuid(),
+    user_id: input.user_id,
+    kind: "draw",
+    amount: input.amount,
+    note: input.note.trim(),
+    income_id: incomeId,
+    occurred_at: d.toISOString(),
+  };
+  await enqueue("business_entries", "insert", { ...row, localRow: row });
+  return row.id;
 }
 
 /** Resize a photo client-side and push it to the avatars bucket. */
