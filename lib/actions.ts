@@ -777,6 +777,13 @@ export async function addBusinessSave(input: {
   return row.id;
 }
 
+/** Delete a set-aside transaction, removing a paired business save if one exists. */
+export async function deleteSetAside(id: string) {
+  const linked = await db().business_entries.where("txn_id").equals(id).first();
+  if (linked) await deleteBusinessEntry(linked.id);
+  else await deleteTransaction(id);
+}
+
 /** Take money out of the business → shows up as personal income ("Cemzlah"). */
 export async function addBusinessDraw(input: {
   user_id: string;

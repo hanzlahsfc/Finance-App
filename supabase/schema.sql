@@ -395,6 +395,9 @@ create policy splits_insert on public.activity_splits for insert to authenticate
   with check (exists (select 1 from public.activities a where a.id = activity_id and a.created_by = auth.uid()));
 create policy splits_delete on public.activity_splits for delete to authenticated
   using (exists (select 1 from public.activities a where a.id = activity_id and a.created_by = auth.uid()));
+create policy splits_update on public.activity_splits for update to authenticated
+  using (exists (select 1 from public.activities a where a.id = activity_id and a.created_by = auth.uid()))
+  with check (exists (select 1 from public.activities a where a.id = activity_id and a.created_by = auth.uid()));
 
 -- settlements: members read; inserts go through record_payment()
 create policy settlements_read on public.settlements for select to authenticated

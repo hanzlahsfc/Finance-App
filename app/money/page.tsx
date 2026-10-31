@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useApp } from "@/lib/store";
-import { useIncome, useBills, useBillPayments, billPaidThisPeriod, useWeekTransactions } from "@/lib/hooks";
-import { formatMoney, weekKey, formatDate } from "@/lib/utils";
+import { useIncome, useBills, useBillPayments, billPaidThisPeriod, useWeekTransactions, useTransactions, useSavingsPool } from "@/lib/hooks";
+import { formatMoney, weekKey, formatDate, formatDayLabel } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Segmented, EmptyState } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
-import { addIncome, deleteIncome, addBill, markBillPaid, unmarkBillPaid, deleteBill, updateProfile } from "@/lib/actions";
+import { addIncome, deleteIncome, addBill, markBillPaid, unmarkBillPaid, deleteBill, updateProfile, deleteSetAside } from "@/lib/actions";
 import { categoryById, CATEGORIES } from "@/lib/categories";
 import type { IncomeKind, BillFrequency, Bill } from "@/lib/types";
 import Link from "next/link";
@@ -27,6 +27,7 @@ export default function MoneyPage() {
   const [selBill, setSelBill] = useState<Bill | null>(null);
   const [selIncome, setSelIncome] = useState<string | null>(null);
   const [savingsSheet, setSavingsSheet] = useState(false);
+  const [delSave, setDelSave] = useState<string | null>(null);
 
   const wk = weekKey(new Date());
   const weekIncome = income.filter((i) => i.week_start === wk);
@@ -37,6 +38,12 @@ export default function MoneyPage() {
 
   const unpaid = bills.filter((b) => !billPaidThisPeriod(b, payments));
   const paid = bills.filter((b) => billPaidThisPeriod(b, payments));
+
+  const allTxns = useTransactions(uid);
+  const pool = useSavingsPool(uid, pct);
+  const manualSaves = allTxns.filter((t) => t.kind === "set_aside");
+  const manualTotal = manualSaves.reduce((s, t) => s + t.amount, 0);
+  const paySaved = (income.reduce((s, i) => s + i.amount, 0) * pct) / 100;
 
   if (!session) return null;
 
@@ -97,9 +104,14 @@ export default function MoneyPage() {
         <ListRow
           icon="chart"
           iconBg="rgba(100,210,255,0.15)"
-          title={`${pct}% of pay`}
-          subtitle={payTotal > 0 ? `${formatMoney((payTotal * pct) / 100, currency)} this week` : "Set your savings goal"}
-          right={<Icon name="chevronRight" size={16} className="text-sub2" />}
+          title="Savings pool"
+          subtitle={`${pct}% of pay${manualSaves.length ? ` · ${manualSaves.length} saved by hand` : ""}`}
+          right={
+            <span className="flex items-center gap-2">
+              <span className="text-[15px] font-semibold tabular-nums text-teal">{formatMoney(pool.setAsideTotal, currency)}</span>
+              <Icon name="chevronRight" size={16} className="text-sub2" />
+            </span>
+          }
           onClick={() => setSavingsSheet(true)}
         />
       </Card>
@@ -174,8 +186,79 @@ export default function MoneyPage() {
         </Sheet>
       )}
       {savingsSheet && (
-        <Sheet title="Set aside" onClose={() => setSavingsSheet(false)}>
-          <SavingsEditor uid={uid!} current={pct} onDone={() => setSavingsSheet(false)} />
+        <Sheet title="Savings pool" onClose={() => { setSavingsSheet(false); setDelSave(null); }}>
+          <div className="text-center py-4">
+            <p className="text-[34px] font-bold tabular-nums text-teal">{formatMoney(pool.setAsideTotal, currency)}</p>
+            <p className="text-sub text-[14px]">free to use {formatMoney(pool.free, currency)}</p>
+          </div>
+          <div className="card mb-4">
+            <ListRow
+              icon="chart"
+              iconBg="rgba(100,210,255,0.15)"
+              title={`${pct}% of pay`}
+              subtitle="auto from pay"
+              right={<span className="text-[14px] tabular-nums text-sub">{formatMoney(paySaved, currency)}</span>}
+            />
+            <ListRow
+              icon="coins"
+              iconBg="rgba(191,90,242,0.15)"
+              title="Saved by hand"
+              subtitle={`${manualSaves.length} ${manualSaves.length === 1 ? "entry" : "entries"}`}
+              right={<span className="text-[14px] tabular-nums text-sub">{formatMoney(manualTotal, currency)}</span>}
+            />
+            {pool.inGoals > 0 && (
+              <ListRow
+                icon="target"
+                iconBg="rgba(48,209,88,0.15)"
+                title="In goals"
+                right={<span className="text-[14px] tabular-nums text-sub">−{formatMoney(pool.inGoals, currency)}</span>}
+              />
+            )}
+            {pool.inDebts > 0 && (
+              <ListRow
+                icon="wallet"
+                iconBg="rgba(255,159,10,0.15)"
+                title="Earmarked for debts"
+                right={<span className="text-[14px] tabular-nums text-sub">−{formatMoney(pool.inDebts, currency)}</span>}
+              />
+            )}
+          </div>
+          {manualSaves.length > 0 && (
+            <>
+              <SectionTitle>Saved by hand</SectionTitle>
+              <div className="card mb-4">
+                {manualSaves.map((t) => (
+                  <ListRow
+                    key={t.id}
+                    icon="coins"
+                    iconBg="rgba(191,90,242,0.15)"
+                    title={t.note || "Set aside"}
+                    subtitle={formatDayLabel(t.occurred_at)}
+                    right={
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-semibold tabular-nums">{formatMoney(t.amount, currency)}</span>
+                        {delSave === t.id ? (
+                          <button
+                            className="pill text-red"
+                            style={{ background: "rgba(255,69,58,0.15)" }}
+                            onClick={async () => { await deleteSetAside(t.id); setDelSave(null); }}
+                          >
+                            Delete?
+                          </button>
+                        ) : (
+                          <button aria-label="Delete" className="text-sub2 p-1 -mr-1" onClick={() => setDelSave(t.id)}>
+                            <Icon name="trash" size={16} />
+                          </button>
+                        )}
+                      </div>
+                    }
+                  />
+                ))}
+              </div>
+            </>
+          )}
+          <SectionTitle>Auto from pay</SectionTitle>
+          <SavingsEditor uid={uid!} current={pct} onDone={() => {}} />
         </Sheet>
       )}
     </div>
