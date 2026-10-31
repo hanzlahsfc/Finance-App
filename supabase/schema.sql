@@ -214,10 +214,11 @@ create index idx_committee_pay on public.committee_payments (committee_id, month
 create table public.business_entries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
-  kind text not null check (kind in ('income', 'expense', 'zakat', 'draw')),
+  kind text not null check (kind in ('income', 'expense', 'zakat', 'draw', 'save')),
   amount numeric not null check (amount > 0),
   note text not null default '',
   income_id uuid references public.income_entries(id) on delete set null,
+  txn_id uuid references public.transactions(id) on delete set null,
   occurred_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );

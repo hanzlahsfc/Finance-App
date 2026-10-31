@@ -743,7 +743,38 @@ export async function deleteBusinessEntry(id: string) {
   if (e?.kind === "draw" && e.income_id) {
     await enqueue("income_entries", "delete", { id: e.income_id });
   }
+  if (e?.kind === "save" && e.txn_id) {
+    await enqueue("transactions", "delete", { id: e.txn_id });
+  }
   await enqueue("business_entries", "delete", { id });
+}
+
+/** Save business money → lands in the personal savings pool (set aside). */
+export async function addBusinessSave(input: {
+  user_id: string;
+  amount: number;
+  note: string;
+  occurred_at?: string;
+}) {
+  const txnId = await addTransaction({
+    user_id: input.user_id,
+    kind: "set_aside",
+    amount: input.amount,
+    note: input.note.trim() || "Cemzlah savings",
+    category: "savings",
+    occurred_at: input.occurred_at,
+  });
+  const row: BusinessEntry = {
+    id: uuid(),
+    user_id: input.user_id,
+    kind: "save",
+    amount: input.amount,
+    note: input.note.trim(),
+    txn_id: txnId,
+    occurred_at: input.occurred_at ?? new Date().toISOString(),
+  };
+  await enqueue("business_entries", "insert", { ...row, localRow: row });
+  return row.id;
 }
 
 /** Take money out of the business → shows up as personal income ("Cemzlah"). */
