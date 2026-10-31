@@ -145,7 +145,7 @@ export default function FriendPage() {
                     ) : (
                       <span className="text-sub text-[13px]">settled</span>
                     )}
-                    {e.activity.created_by === uid &&
+                    {(e.activity.created_by === uid || e.activity.paid_by === uid) &&
                       (confirmDel === e.activity.id ? (
                         <button
                           className="pill text-red"

@@ -153,6 +153,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
           activity={selActivity}
           splits={splitsFor(selActivity)}
           members={data.members}
+          groupCreator={data.group.created_by}
           settlements={data.settlements.filter((s) => s.activity_id === selActivity.id)}
           uid={uid!}
           currency={currency}
@@ -294,11 +295,12 @@ function NewActivitySheet({
 // ---------- activity detail ----------
 
 function ActivitySheet({
-  activity, splits, members, settlements, uid, currency, profileMap, onClose,
+  activity, splits, members, settlements, uid, currency, profileMap, groupCreator, onClose,
 }: {
   activity: Activity;
   splits: ActivitySplit[];
   members: GroupMember[];
+  groupCreator?: string;
   settlements: { from_user: string; amount: number; note: string; created_at?: string }[];
   uid: string;
   currency: string;
@@ -308,7 +310,7 @@ function ActivitySheet({
   const [paySheet, setPaySheet] = useState<string | null>(null); // from_user
   const [adminOpen, setAdminOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const isAdmin = activity.created_by === uid;
+  const isAdmin = activity.created_by === uid || activity.paid_by === uid || groupCreator === uid;
   const nameOf = (id: string) => (id === uid ? "You" : profileMap.get(id)?.display_name ?? "…");
 
   return (
