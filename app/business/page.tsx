@@ -54,16 +54,18 @@ export default function BusinessPage() {
       {/* profit + zakat hero */}
       <Card className="card-pad mb-5">
         <div className="flex items-center justify-between mb-1">
-          <span className="section-title !mb-0">Business profit</span>
+          <span className="section-title !mb-0">Cash in business</span>
           <EyeToggle />
         </div>
-        <p className={`amount-hero mt-2 ${profit < 0 ? "text-red" : ""}`}>{formatMoney(Math.max(0, profit), currency)}</p>
-        <p className="text-sub text-[13px] mb-4">income {formatMoney(income, currency)} · spent {formatMoney(expense, currency)}</p>
-        <p className="text-sub text-[13px] mb-3">
-          cash in business {formatMoney(Math.max(0, cash), currency)}
-          {drawn > 0 && <> · paid to me {formatMoney(drawn, currency)}</>}
-          {saved > 0 && <> · saved {formatMoney(saved, currency)}</>}
-        </p>
+        <p className={`amount-hero mt-2 ${cash < 0 ? "text-red" : ""}`}>{formatMoney(cash, currency)}</p>
+        <p className="text-sub text-[13px] mb-4">profit {formatMoney(profit, currency)} · income {formatMoney(income, currency)} · spent {formatMoney(expense, currency)}</p>
+        {(drawn > 0 || saved > 0) && (
+          <p className="text-sub text-[13px] mb-3">
+            {drawn > 0 && <>paid to me {formatMoney(drawn, currency)}</>}
+            {drawn > 0 && saved > 0 && " · "}
+            {saved > 0 && <>saved {formatMoney(saved, currency)}</>}
+          </p>
+        )}
         <div className="border-t border-card2 pt-3 flex items-center justify-between">
           <div>
             <p className="text-[12px] text-sub mb-0.5">Zakat ({pct}% of profit)</p>
