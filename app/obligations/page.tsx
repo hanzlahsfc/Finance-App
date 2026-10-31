@@ -46,7 +46,7 @@ export default function ObligationsPage() {
 
   const router = useRouter();
   useEffect(() => {
-    if (profile && profile.username !== OBLIGATIONS_USERNAME) router.replace("/trip");
+    if (profile) router.replace(profile.username === OBLIGATIONS_USERNAME ? "/business" : "/trip");
   }, [profile, router]);
 
   if (!session || (profile && profile.username !== OBLIGATIONS_USERNAME)) return null;

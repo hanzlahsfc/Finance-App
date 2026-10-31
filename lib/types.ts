@@ -229,3 +229,15 @@ export interface CommitteePayout {
   month: number;
   paid_at: string;
 }
+
+export type BusinessKind = "income" | "expense" | "zakat";
+
+export interface BusinessEntry {
+  id: string;
+  user_id: string;
+  kind: BusinessKind;
+  amount: number;
+  note: string;
+  occurred_at: string;
+  created_at?: string;
+}

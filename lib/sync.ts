@@ -27,6 +27,7 @@ const MIRROR_TABLES = [
   "committee_members",
   "committee_payments",
   "committee_payouts",
+  "business_entries",
 ] as const;
 
 type MirrorTable = (typeof MIRROR_TABLES)[number];
@@ -204,7 +205,7 @@ export async function pullAll(): Promise<void> {
   emit();
   try {
     // Personal tables
-    const [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes, plansRes, tripsRes, tmRes, tcRes, comRes, cmRes, cpRes, cpoRes] =
+    const [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes, plansRes, tripsRes, tmRes, tcRes, comRes, cmRes, cpRes, cpoRes, bizRes] =
       await Promise.all([
         sb.from("profiles").select("*"),
         sb.from("friendships").select("*"),
@@ -224,8 +225,9 @@ export async function pullAll(): Promise<void> {
         sb.from("committee_members").select("*"),
         sb.from("committee_payments").select("*"),
         sb.from("committee_payouts").select("*"),
+        sb.from("business_entries").select("*"),
       ]);
-    for (const r of [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes, plansRes, tripsRes, tmRes, tcRes, comRes, cmRes, cpRes, cpoRes]) {
+    for (const r of [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes, plansRes, tripsRes, tmRes, tcRes, comRes, cmRes, cpRes, cpoRes, bizRes]) {
       if (r.error) throw r.error;
     }
 
@@ -276,6 +278,7 @@ export async function pullAll(): Promise<void> {
       committee_members: cmRes.data ?? [],
       committee_payments: cpRes.data ?? [],
       committee_payouts: cpoRes.data ?? [],
+      business_entries: bizRes.data ?? [],
     };
 
     await db().transaction(

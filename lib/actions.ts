@@ -24,6 +24,8 @@ import type {
   Committee,
   CommitteeMember,
   CommitteePayment,
+  BusinessEntry,
+  BusinessKind,
 } from "./types";
 
 // ---------- transactions ----------
@@ -708,6 +710,36 @@ export async function unmarkPotPaid(committeeId: string, month: number) {
     .filter((p) => p.month === month)
     .first();
   if (row) await enqueue("committee_payouts", "delete", { id: row.id });
+}
+
+// ---------- business (Cemzlah) ----------
+
+export async function addBusinessEntry(input: {
+  user_id: string;
+  kind: BusinessKind;
+  amount: number;
+  note: string;
+  occurred_at?: string;
+}) {
+  const row: BusinessEntry = {
+    id: uuid(),
+    user_id: input.user_id,
+    kind: input.kind,
+    amount: input.amount,
+    note: input.note.trim(),
+    occurred_at: input.occurred_at ?? new Date().toISOString(),
+  };
+  await enqueue("business_entries", "insert", { ...row, localRow: row });
+  return row.id;
+}
+
+export async function updateBusinessEntry(e: BusinessEntry, patch: Partial<BusinessEntry>) {
+  const merged = { ...e, ...patch };
+  await enqueue("business_entries", "update", { id: e.id, localRow: merged, localPatch: patch });
+}
+
+export async function deleteBusinessEntry(id: string) {
+  await enqueue("business_entries", "delete", { id });
 }
 
 /** Resize a photo client-side and push it to the avatars bucket. */

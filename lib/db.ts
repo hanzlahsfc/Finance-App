@@ -22,6 +22,7 @@ import type {
   CommitteeMember,
   CommitteePayment,
   CommitteePayout,
+  BusinessEntry,
 } from "./types";
 
 export interface OutboxItem {
@@ -58,6 +59,7 @@ class HisabDB extends Dexie {
   committee_members!: Table<CommitteeMember, [string, string]>;
   committee_payments!: Table<CommitteePayment, string>;
   committee_payouts!: Table<CommitteePayout, string>;
+  business_entries!: Table<BusinessEntry, string>;
   outbox!: Table<OutboxItem, number>;
   meta!: Table<{ key: string; value: string }, string>;
 
@@ -94,6 +96,9 @@ class HisabDB extends Dexie {
       committee_members: "[committee_id+user_id], committee_id, user_id",
       committee_payments: "id, committee_id, user_id",
       committee_payouts: "id, committee_id",
+    });
+    this.version(7).stores({
+      business_entries: "id, user_id, occurred_at",
     });
   }
 }

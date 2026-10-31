@@ -210,6 +210,19 @@ create table public.committee_payouts (
 
 create index idx_committee_pay on public.committee_payments (committee_id, month);
 
+-- ============ BUSINESS (Samzlah income & expenses) ============
+create table public.business_entries (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null check (kind in ('income', 'expense', 'zakat')),
+  amount numeric not null check (amount > 0),
+  note text not null default '',
+  occurred_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create index idx_business_entries_user on public.business_entries (user_id, occurred_at desc);
+
 -- ============ HELPER FUNCTIONS (security definer to avoid RLS recursion) ============
 create or replace function public.is_group_member(p_group_id uuid)
 returns boolean language sql stable security definer set search_path = public as
@@ -313,6 +326,7 @@ alter table public.committees enable row level security;
 alter table public.committee_members enable row level security;
 alter table public.committee_payments enable row level security;
 alter table public.committee_payouts enable row level security;
+alter table public.business_entries enable row level security;
 
 -- profiles: anyone signed in can look up users (needed for friend search);
 -- only you can create/edit your own row.
@@ -457,6 +471,10 @@ create policy committee_payouts_insert on public.committee_payouts for insert to
   with check (public.is_committee_collector(committee_id));
 create policy committee_payouts_delete on public.committee_payouts for delete to authenticated
   using (public.is_committee_collector(committee_id));
+
+-- business entries: owner only, like transactions
+create policy business_entries_all on public.business_entries for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- ============ REALTIME ============
 alter publication supabase_realtime add table public.activities;

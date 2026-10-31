@@ -11,7 +11,7 @@ import { OBLIGATIONS_USERNAME } from "@/lib/utils";
 const TABS = [
   { href: "/", label: "Home", icon: "house" as const },
   { href: "/transactions", label: "Activity", icon: "list" as const },
-  { href: "/obligations", label: "Obligations", icon: "coins" as const },
+  { href: "/business", label: "Cemzlah", icon: "wallet" as const },
   { href: "/groups", label: "Friends", icon: "people" as const },
 ];
 

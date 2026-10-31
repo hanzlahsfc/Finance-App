@@ -3,7 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "./db";
 import { startOfWeek, endOfWeek, toISODate, billPeriodStart } from "./utils";
-import type { Profile, Transaction, Bill, BillPayment, Obligation, SavingsGoal, Plan, Trip, Committee } from "./types";
+import type { Profile, Transaction, Bill, BillPayment, Obligation, SavingsGoal, Plan, Trip, Committee, BusinessEntry } from "./types";
 
 export function useTransactions(userId?: string) {
   return useLiveQuery(
@@ -229,6 +229,18 @@ export function useCommittee(committeeId?: string) {
 export function committeeMonth(startMonth: string, ref = new Date()): number {
   const s = new Date(startMonth);
   return (ref.getFullYear() - s.getFullYear()) * 12 + (ref.getMonth() - s.getMonth()) + 1;
+}
+
+export function useBusinessEntries(userId?: string) {
+  return useLiveQuery(
+    async () => {
+      if (!userId) return [];
+      const rows = await db().business_entries.where("user_id").equals(userId).toArray();
+      return rows.sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
+    },
+    [userId],
+    [] as BusinessEntry[]
+  );
 }
 
 /** Per-friend shared-event stats: event count and balances across all groups. */
