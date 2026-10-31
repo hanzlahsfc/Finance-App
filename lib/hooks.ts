@@ -243,6 +243,21 @@ export function useBusinessEntries(userId?: string) {
   );
 }
 
+/** Transaction ids of business-linked saves — excluded from personal spend math. */
+export function useBusinessSaveTxnIds(userId?: string) {
+  return useLiveQuery(
+    async () => {
+      if (!userId) return new Set<string>();
+      const rows = await db().business_entries.where("user_id").equals(userId).toArray();
+      return new Set(
+        rows.filter((r) => r.kind === "save" && r.txn_id).map((r) => r.txn_id as string)
+      );
+    },
+    [userId],
+    new Set<string>()
+  );
+}
+
 /** Per-friend shared-event stats: event count and balances across all groups. */
 export function useFriendStats(userId?: string) {
   return useLiveQuery(

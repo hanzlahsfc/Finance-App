@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
-import { useTransactions, useIncome } from "@/lib/hooks";
+import { useTransactions, useIncome, useBusinessSaveTxnIds } from "@/lib/hooks";
 import { formatMoney, startOfWeek, endOfWeek, weekKey, weekRangeLabel } from "@/lib/utils";
 import { Card, SectionTitle, EmptyState } from "@/components/ui";
 import { Icon } from "@/components/Icon";
@@ -16,6 +16,7 @@ export default function ReportsPage() {
   const currency = profile?.currency ?? "PKR";
   const txns = useTransactions(session?.user.id);
   const income = useIncome(session?.user.id);
+  const bizSaveIds = useBusinessSaveTxnIds(session?.user.id);
   const [offset, setOffset] = useState(0); // weeks back
 
   const range = useMemo(() => {
@@ -44,11 +45,11 @@ export default function ReportsPage() {
 
   const byCat = useMemo(() => {
     const m = new Map<string, number>();
-    for (const t of weekTxns.filter((x) => x.kind !== "income")) {
+    for (const t of weekTxns.filter((x) => x.kind !== "income" && !bizSaveIds.has(x.id))) {
       m.set(t.category, (m.get(t.category) ?? 0) + t.amount);
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
-  }, [weekTxns]);
+  }, [weekTxns, bizSaveIds]);
   const catMax = byCat[0]?.[1] ?? 1;
 
   const byCounterparty = useMemo(() => groupSum(weekTxns, (t) => t.counterparty), [weekTxns]);

@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp, useSyncState } from "@/lib/store";
-import { useTransactions, useWeekTransactions, useIncome, useBills, useBillPayments, billPaidThisPeriod, useGroups, useOwedToMe, todaySpend } from "@/lib/hooks";
+import { useTransactions, useWeekTransactions, useIncome, useBills, useBillPayments, billPaidThisPeriod, useGroups, useOwedToMe, todaySpend, useBusinessSaveTxnIds } from "@/lib/hooks";
 import { formatMoney, weekKey, formatDayLabel, OBLIGATIONS_USERNAME } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState, EyeToggle } from "@/components/ui";
 import { Icon } from "@/components/Icon";
@@ -30,7 +30,8 @@ export default function Home() {
     weekIncome.reduce((s, i) => s + i.amount, 0) +
     weekTxns.filter((t) => t.kind === "income").reduce((s, t) => s + t.amount, 0);
   const setAside = (pay * (profile?.savings_percent ?? 20)) / 100;
-  const spent = weekTxns.filter((t) => t.kind !== "income").reduce((s, t) => s + t.amount, 0);
+  const bizSaveIds = useBusinessSaveTxnIds(uid);
+  const spent = weekTxns.filter((t) => t.kind !== "income" && !bizSaveIds.has(t.id)).reduce((s, t) => s + t.amount, 0);
   const left = pay - setAside - spent;
   const billsDue = bills.filter((b) => !billPaidThisPeriod(b, payments));
 
@@ -122,7 +123,7 @@ export default function Home() {
         <Link href="/transactions">
           <Card className="card-pad">
             <Icon name="receipt" size={20} className="text-orange mb-2" />
-            <p className="text-[22px] font-bold tabular-nums">{formatMoney(todaySpend(txns), currency)}</p>
+            <p className="text-[22px] font-bold tabular-nums">{formatMoney(todaySpend(txns.filter((t) => !bizSaveIds.has(t.id))), currency)}</p>
             <p className="text-sub text-[13px]">spent today</p>
           </Card>
         </Link>
@@ -156,7 +157,8 @@ export default function Home() {
         ) : (
           txns.slice(0, 5).map((t) => {
             const c = categoryById(t.category);
-            const out = t.kind === "expense" || t.kind === "loan_given" || t.kind === "set_aside";
+            const biz = bizSaveIds.has(t.id);
+            const out = !biz && (t.kind === "expense" || t.kind === "loan_given" || t.kind === "set_aside");
             return (
               <ListRow
                 key={t.id}
@@ -164,8 +166,8 @@ export default function Home() {
                 title={t.note || c.label}
                 subtitle={`${c.label} · ${formatDayLabel(t.occurred_at)}`}
                 right={
-                  <span className={`text-[15px] font-semibold tabular-nums ${out ? "" : "text-green"}`}>
-                    {out ? "−" : "+"}{formatMoney(t.amount, currency)}
+                  <span className={`text-[15px] font-semibold tabular-nums ${biz ? "text-teal" : out ? "" : "text-green"}`}>
+                    {biz ? "" : out ? "−" : "+"}{formatMoney(t.amount, currency)}
                   </span>
                 }
               />

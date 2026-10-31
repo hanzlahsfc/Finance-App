@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
-import { useTransactions } from "@/lib/hooks";
+import { useTransactions, useBusinessSaveTxnIds } from "@/lib/hooks";
 import { formatMoney, formatDayLabel, formatTime, toISODate, startOfWeek, endOfWeek, startOfDay } from "@/lib/utils";
 import { Card, Segmented, EmptyState, ListRow } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
@@ -17,6 +17,7 @@ export default function TransactionsPage() {
   const { session, profile } = useApp();
   const currency = profile?.currency ?? "PKR";
   const txns = useTransactions(session?.user.id);
+  const bizSaveIds = useBusinessSaveTxnIds(session?.user.id);
   const [range, setRange] = useState<Range>("weekly");
   const [catFilter, setCatFilter] = useState<string | null>(null);
   const [selected, setSelected] = useState<Transaction | null>(null);
@@ -48,7 +49,7 @@ export default function TransactionsPage() {
     return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0]));
   }, [filtered]);
 
-  const totalOut = filtered.filter((t) => t.kind !== "income").reduce((s, t) => s + t.amount, 0);
+  const totalOut = filtered.filter((t) => t.kind !== "income" && !bizSaveIds.has(t.id)).reduce((s, t) => s + t.amount, 0);
   const totalIn = filtered.filter((t) => t.kind === "income").reduce((s, t) => s + t.amount, 0);
 
   const usedCats = useMemo(() => {
@@ -101,7 +102,7 @@ export default function TransactionsPage() {
         <EmptyState icon="receipt" title="Nothing here" hint="Transactions you add will show up grouped by day" />
       ) : (
         groups.map(([day, items]) => {
-          const dayOut = items.filter((t) => t.kind !== "income").reduce((s, t) => s + t.amount, 0);
+          const dayOut = items.filter((t) => t.kind !== "income" && !bizSaveIds.has(t.id)).reduce((s, t) => s + t.amount, 0);
           return (
             <div key={day} className="mb-5">
               <div className="flex justify-between items-center px-1 mb-2">
@@ -111,16 +112,17 @@ export default function TransactionsPage() {
               <Card>
                 {items.map((t) => {
                   const c = categoryById(t.category);
-                  const out = t.kind === "expense" || t.kind === "loan_given" || t.kind === "set_aside";
+                  const biz = bizSaveIds.has(t.id);
+                  const out = !biz && (t.kind === "expense" || t.kind === "loan_given" || t.kind === "set_aside");
                   return (
                     <ListRow
                       key={t.id}
                       icon={<span style={{ color: c.color }}>{c.icon}</span>}
                       title={t.note || c.label}
-                      subtitle={`${c.label} · ${formatTime(t.occurred_at)}${t.place ? ` · ${t.place}` : ""}`}
+                      subtitle={`${c.label} · ${formatTime(t.occurred_at)}${t.place ? ` · ${t.place}` : ""}${biz ? " · from Cemzlah" : ""}`}
                       right={
-                        <span className={`text-[15px] font-semibold tabular-nums ${out ? "" : "text-green"}`}>
-                          {out ? "−" : "+"}{formatMoney(t.amount, currency)}
+                        <span className={`text-[15px] font-semibold tabular-nums ${biz ? "text-teal" : out ? "" : "text-green"}`}>
+                          {biz ? "" : out ? "−" : "+"}{formatMoney(t.amount, currency)}
                         </span>
                       }
                       onClick={() => setSelected(t)}
