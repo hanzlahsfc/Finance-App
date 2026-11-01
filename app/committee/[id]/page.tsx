@@ -329,7 +329,7 @@ function RotationRow({
   m, month, name, shares, avatarUrl, isRecipient, isCollector, status, canKick, canDropSeat, confirming, onConfirmKick, onKick, onDropSeat,
 }: {
   m: CommitteeMember;
-  month: number;
+  month: string;
   name: string;
   shares: number;
   avatarUrl?: string | null;
