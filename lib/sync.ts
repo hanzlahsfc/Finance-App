@@ -275,7 +275,12 @@ export async function pullAll(): Promise<void> {
       trip_members: tmRes.data ?? [],
       trip_contributions: tcRes.data ?? [],
       committees: comRes.data ?? [],
-      committee_members: cmRes.data ?? [],
+      // pre-migration rows lack the surrogate id — synthesize one so the
+      // id-keyed mirror table never rejects them
+      committee_members: (cmRes.data ?? []).map((m: Record<string, unknown>) => ({
+        ...m,
+        id: m.id ?? `${m.committee_id}:${m.user_id}`,
+      })),
       committee_payments: cpRes.data ?? [],
       committee_payouts: cpoRes.data ?? [],
       business_entries: bizRes.data ?? [],
