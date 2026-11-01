@@ -482,11 +482,14 @@ create policy committee_members_delete on public.committee_members for delete to
 create policy committee_payments_read on public.committee_payments for select to authenticated
   using (public.is_committee_member(committee_id));
 create policy committee_payments_insert on public.committee_payments for insert to authenticated
-  with check (user_id = auth.uid() and status = 'pending' and public.is_committee_member(committee_id));
+  with check (
+    public.is_committee_member(committee_id)
+    and ((user_id = auth.uid() and status = 'pending') or public.is_committee_collector(committee_id))
+  );
 create policy committee_payments_update on public.committee_payments for update to authenticated
   using (public.is_committee_collector(committee_id));
 create policy committee_payments_delete on public.committee_payments for delete to authenticated
-  using (user_id = auth.uid() and status = 'pending');
+  using ((user_id = auth.uid() and status = 'pending') or public.is_committee_collector(committee_id));
 
 -- payouts: members read; collector marks/unmarks
 create policy committee_payouts_read on public.committee_payouts for select to authenticated

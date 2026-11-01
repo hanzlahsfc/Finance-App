@@ -3,7 +3,9 @@
 import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
-import { useCommittee, useProfileMap, committeeMonth } from "@/lib/hooks";
+import { useCommittee, useProfileMap, committeeMonth, useUserViews } from "@/lib/hooks";
+import Link from "next/link";
+import { OBLIGATIONS_USERNAME } from "@/lib/utils";
 import { formatMoney, formatDayLabel, toISODate } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
@@ -11,7 +13,7 @@ import { Icon } from "@/components/Icon";
 import { UserPicker } from "@/components/UserPicker";
 import {
   addCommitteeMember, removeCommitteeMember, removeCommitteeSeat, reorderCommitteeMembers, deleteCommittee, updateCommittee,
-  addCommitteePayment, approveCommitteePayment, deleteCommitteePayment,
+  addCommitteePayment, collectorRecordPayment, approveCommitteePayment, deleteCommitteePayment,
   markPotPaid, unmarkPotPaid,
 } from "@/lib/actions";
 import type { Committee, CommitteeMember, CommitteePayment } from "@/lib/types";
@@ -67,6 +69,15 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
     d.setMonth(d.getMonth() + m - 1);
     return d.toLocaleString("en", { month: "short", year: "numeric" });
   };
+  const isOwner = !!profile && (profile.username === OBLIGATIONS_USERNAME || !!profile.admin);
+  const views = isOwner ? ["balance", "trip", "committee"] : (useUserViews(uid)?.views ?? ["trip"]);
+  const mySeatsList = members.filter((m) => m.user_id === uid).sort((a, b) => a.position - b.position);
+  const myDue = committee.amount * mySeats;
+  const myPaid = myPayment?.status === "received" ? myPayment.amount : 0;
+  const unpaidIds = [...new Set(members.map((m) => m.user_id))].filter((id) => {
+    const p = monthPayments.find((x) => x.user_id === id);
+    return p?.status !== "received";
+  });
 
   return (
     <div className="screen px-5 pt-14">
@@ -82,9 +93,47 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
           </button>
         )}
       </div>
-      <p className="text-sub text-[14px] mb-5 flex items-center gap-1.5">
+      <p className="text-sub text-[14px] mb-3 flex items-center gap-1.5">
         <Icon name="wallet" size={14} /> {formatMoney(committee.amount, currency)}/share · {nameOf(committee.collector_id)} collects
       </p>
+
+      {/* dashboard switcher — members granted multiple views + owner */}
+      {views.length > 1 && (
+        <div className="flex gap-2 mb-5">
+          {views.includes("balance") && <Link href="/" className="pill bg-card2 text-sub">Home</Link>}
+          {views.includes("trip") && <Link href="/trip" className="pill bg-card2 text-sub">Trip</Link>}
+          {views.includes("committee") && <span className="pill bg-tint text-white">Committee</span>}
+        </div>
+      )}
+
+      {/* your shares — dues + upcoming pot months */}
+      {isMember && (
+        <Card className="card-pad mb-6">
+          <div className="flex items-center justify-between mb-1">
+            <span className="section-title !mb-0">Your committee</span>
+            <span className="text-[12px] text-sub">{mySeats} {mySeats === 1 ? "share" : "shares"}</span>
+          </div>
+          <p className="text-[15px] font-semibold tabular-nums">
+            {myPaid >= myDue
+              ? <span className="text-green">Paid this month · {formatMoney(myPaid, currency)}</span>
+              : myPayment
+                ? <span className="text-orange">Waiting approval · {formatMoney(myPayment.amount, currency)} of {formatMoney(myDue, currency)}</span>
+                : <span>You owe {formatMoney(myDue - myPaid, currency)} this month</span>}
+          </p>
+          {mySeatsList.length > 0 && (
+            <div className="border-t border-card2 mt-3 pt-3">
+              <p className="text-[12px] text-sub mb-1.5">Your pot months</p>
+              <div className="flex flex-wrap gap-2">
+                {mySeatsList.map((s) => (
+                  <span key={s.id} className="pill bg-card2 text-sub">
+                    {monthLabel(((s.position - 1) % n) + 1 + Math.floor((month - 1) / n) * n)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* this month hero */}
       <Card className="card-pad mb-6 overflow-hidden">
@@ -170,6 +219,24 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
           );
         })}
       </Card>
+
+      {/* collector: record a member's payment as received */}
+      {isCollector && unpaidIds.length > 0 && (
+        <>
+          <SectionTitle>Record who paid</SectionTitle>
+          <div className="flex gap-2 overflow-x-auto no-scrollbar mb-5">
+            {unpaidIds.map((id) => (
+              <button
+                key={id}
+                className="pill shrink-0 bg-card2 text-sub flex items-center gap-1.5"
+                onClick={async () => collectorRecordPayment({ committee_id: committee.id, user_id: id, month, amount: committee.amount * seatsOf(id) })}
+              >
+                <Icon name="check" size={12} /> {nameOf(id).split(" ")[0]} · {formatMoney(committee.amount * seatsOf(id), currency)}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* this month's payments */}
       <SectionTitle>Month {month} payments</SectionTitle>

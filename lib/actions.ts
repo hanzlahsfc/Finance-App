@@ -681,6 +681,27 @@ export async function deleteCommittee(id: string) {
   await enqueue("committees", "delete", { id });
 }
 
+/** Collector records a member's payment as received directly. */
+export async function collectorRecordPayment(input: {
+  committee_id: string;
+  user_id: string;
+  month: number;
+  amount: number;
+}) {
+  const row: CommitteePayment = {
+    id: uuid(),
+    committee_id: input.committee_id,
+    user_id: input.user_id,
+    month: input.month,
+    amount: input.amount,
+    status: "received",
+    paid_at: new Date().toISOString(),
+    received_at: new Date().toISOString(),
+  };
+  await enqueue("committee_payments", "insert", { ...row, localRow: row });
+  return row.id;
+}
+
 /** Member logs this month's payment — pending until the collector confirms. */
 export async function addCommitteePayment(input: {
   committee_id: string;
