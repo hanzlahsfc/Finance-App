@@ -3,7 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "./db";
 import { startOfWeek, endOfWeek, toISODate, billPeriodStart } from "./utils";
-import type { Profile, Transaction, Bill, BillPayment, Obligation, SavingsGoal, Plan, Trip, Committee, BusinessEntry } from "./types";
+import type { Profile, Transaction, Bill, BillPayment, Obligation, SavingsGoal, Plan, Trip, Committee, BusinessEntry, UserView } from "./types";
 
 export function useTransactions(userId?: string) {
   return useLiveQuery(
@@ -244,6 +244,20 @@ export function useBusinessEntries(userId?: string) {
 }
 
 /** Transaction ids of business-linked saves — excluded from personal spend math. */
+/** Dashboards a member may open. Missing row = trip only (legacy default). */
+export function useUserViews(userId?: string): UserView | undefined {
+  return useLiveQuery(
+    async () => (userId ? await db().user_views.get(userId) : undefined),
+    [userId],
+    undefined
+  );
+}
+
+/** All view rows — admins mirror everyone's, members only their own. */
+export function useAllUserViews(): UserView[] {
+  return useLiveQuery(async () => db().user_views.toArray(), [], [] as UserView[]);
+}
+
 export function useBusinessSaveTxnIds(userId?: string) {
   return useLiveQuery(
     async () => {

@@ -10,7 +10,7 @@ import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
 import { UserPicker } from "@/components/UserPicker";
 import {
-  addCommitteeMember, removeCommitteeMember, reorderCommitteeMembers, deleteCommittee, updateCommittee,
+  addCommitteeMember, removeCommitteeMember, removeCommitteeSeat, reorderCommitteeMembers, deleteCommittee, updateCommittee,
   addCommitteePayment, approveCommitteePayment, deleteCommitteePayment,
   markPotPaid, unmarkPotPaid,
 } from "@/lib/actions";
@@ -50,7 +50,9 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
   const nameOf = (userId: string) => (userId === uid ? "You" : profileMap.get(userId)?.display_name ?? "…");
 
   const month = committeeMonth(committee.start_month);
-  const n = members.length;
+  const n = members.length; // seats — one person can hold several
+  const seatsOf = (userId: string) => members.filter((m) => m.user_id === userId).length;
+  const uniqueUsers = new Set(members.map((m) => m.user_id)).size;
   const recipientId = n ? members.find((m) => m.position === ((month - 1) % n) + 1)?.user_id : undefined;
   const monthPayments = payments.filter((p) => p.month === month);
   const received = monthPayments.filter((p) => p.status === "received");
@@ -58,6 +60,7 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
   const collected = received.reduce((s, p) => s + p.amount, 0);
   const potPaid = payouts.some((p) => p.month === month);
   const myPayment = monthPayments.find((p) => p.user_id === uid);
+  const mySeats = seatsOf(uid ?? "");
   const statusOf = (userId: string) => monthPayments.find((p) => p.user_id === userId)?.status;
 
   return (
@@ -75,30 +78,38 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
         )}
       </div>
       <p className="text-sub text-[14px] mb-5 flex items-center gap-1.5">
-        <Icon name="wallet" size={14} /> {formatMoney(committee.amount, currency)}/mo each · {nameOf(committee.collector_id)} collects
+        <Icon name="wallet" size={14} /> {formatMoney(committee.amount, currency)}/share · {nameOf(committee.collector_id)} collects
       </p>
 
       {/* this month hero */}
-      <Card className="card-pad mb-6 text-center">
-        <p className="text-[12px] text-sub uppercase tracking-wide mb-1">Month {month}</p>
-        <p className="text-[22px] font-bold">{nameOf(recipientId ?? "")}&apos;s pot</p>
-        <p className="text-sub text-[13px] mt-1 mb-4">
-          {formatMoney(collected, currency)} collected of {formatMoney(pot, currency)}
-          {potPaid ? " · pot handed over" : ""}
-        </p>
-        <div className="progress-track">
+      <Card className="card-pad mb-6 overflow-hidden">
+        <div className="flex items-center justify-between mb-3">
+          <span className="pill bg-card2 text-sub">Month {month}</span>
+          {potPaid && (
+            <span className="pill bg-[rgba(48,209,88,0.15)] text-green"><Icon name="check" size={12} /> handed over</span>
+          )}
+        </div>
+        <p className="text-center text-[20px] font-bold">{nameOf(recipientId ?? "")}&apos;s pot</p>
+        <div className="text-center mt-1 mb-3">
+          <span className="text-[38px] font-bold tabular-nums leading-none">{formatMoney(collected, currency)}</span>
+          <span className="text-sub text-[16px] tabular-nums"> / {formatMoney(pot, currency)}</span>
+        </div>
+        <div className="progress-track mb-2" style={{ height: 8 }}>
           <div
             className="progress-fill"
             style={{ width: `${pot ? Math.min(100, (collected / pot) * 100) : 0}%`, background: "linear-gradient(90deg, var(--color-tint), var(--color-purple))" }}
           />
         </div>
+        <p className="text-sub text-[13px] text-center">
+          {received.length} of {uniqueUsers} paid · {n} {n === 1 ? "share" : "shares"} in the pot
+        </p>
         {isCollector && !potPaid && (
           <button className="btn btn-secondary mt-4" onClick={async () => markPotPaid(committee.id, month)}>
             <Icon name="check" size={16} /> Mark pot handed to {nameOf(recipientId ?? "").split(" ")[0]}
           </button>
         )}
         {isCollector && potPaid && (
-          <button className="text-sub text-[13px] mt-3" onClick={async () => unmarkPotPaid(committee.id, month)}>
+          <button className="text-sub text-[13px] mt-3 mx-auto block" onClick={async () => unmarkPotPaid(committee.id, month)}>
             Undo — pot not handed yet
           </button>
         )}
@@ -108,7 +119,8 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
       <div className="flex gap-2 mb-6">
         {isMember && !myPayment && (
           <button className="btn flex-1" onClick={() => setPayOpen(true)}>
-            <Icon name="plus" size={17} /> Pay {formatMoney(committee.amount, currency)}
+            <Icon name="plus" size={17} /> Pay {formatMoney(committee.amount * mySeats, currency)}
+            {mySeats > 1 && <span className="text-[12px] opacity-80"> · {mySeats} shares</span>}
           </button>
         )}
         {(isCreator || isCollector) && (
@@ -131,20 +143,24 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
         {members.map((m) => {
           const mMonth = ((m.position - 1) % n) + 1 + Math.floor((month - 1) / n) * n;
           const st = statusOf(m.user_id);
+          const shares = seatsOf(m.user_id);
           return (
             <RotationRow
-              key={m.user_id}
+              key={m.id}
               m={m}
               month={mMonth}
               name={nameOf(m.user_id)}
+              shares={shares}
               avatarUrl={profileMap.get(m.user_id)?.avatar_url}
-              isRecipient={m.user_id === recipientId}
+              isRecipient={m.user_id === recipientId && m.position === ((month - 1) % n) + 1}
               isCollector={m.user_id === committee.collector_id}
               status={st}
               canKick={isCreator && m.user_id !== uid && m.user_id !== committee.collector_id}
+              canDropSeat={isCreator && shares > 1}
               confirming={confirmKick === m.user_id}
               onConfirmKick={() => setConfirmKick(m.user_id)}
               onKick={async () => { await removeCommitteeMember(committee.id, m.user_id); setConfirmKick(null); }}
+              onDropSeat={async () => { await removeCommitteeSeat(m.id); }}
             />
           );
         })}
@@ -218,6 +234,7 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
         <PaySheet
           committee={committee}
           month={month}
+          due={committee.amount * mySeats}
           uid={uid!}
           currency={currency}
           onClose={() => setPayOpen(false)}
@@ -226,9 +243,12 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
 
       {addOpen && (
         <Sheet title="Add person" onClose={() => setAddOpen(false)}>
+          <p className="text-sub text-[13px] mb-3 px-1">
+            Tap a name to add a share — pick several people, or give someone extra shares.
+          </p>
           <UserPicker
             uid={uid!}
-            excludeIds={new Set(members.map((m) => m.user_id))}
+            excludeIds={new Set()}
             onPick={async (p) => { await addCommitteeMember(committee.id, p.id, uid!); }}
           />
         </Sheet>
@@ -251,9 +271,10 @@ function ReorderSheet({ members, uid, nameOf, onClose }: {
   nameOf: (id: string) => string;
   onClose: () => void;
 }) {
-  const [order, setOrder] = useState(members.map((m) => m.user_id));
+  const [order, setOrder] = useState(members.map((m) => m.id));
   const [saving, setSaving] = useState(false);
   const profileMap = useProfileMap();
+  const nameFor = (mid: string) => nameOf(members.find((m) => m.id === mid)?.user_id ?? "");
 
   const move = (i: number, dir: -1 | 1) => {
     const j = i + dir;
@@ -270,8 +291,8 @@ function ReorderSheet({ members, uid, nameOf, onClose }: {
         {order.map((id, i) => (
           <div key={id} className="list-row">
             <span className="text-[15px] font-bold text-sub w-5 text-center shrink-0">{i + 1}</span>
-            <Avatar name={nameOf(id)} id={id} size={32} src={profileMap.get(id)?.avatar_url} />
-            <div className="flex-1 min-w-0 text-[15px] font-medium truncate">{nameOf(id)}</div>
+            <Avatar name={nameFor(id)} id={id} size={32} />
+            <div className="flex-1 min-w-0 text-[15px] font-medium truncate">{nameFor(id)}</div>
             <div className="flex gap-1 shrink-0">
               <button aria-label="Move up" className="text-sub2 p-1.5" disabled={i === 0} onClick={() => move(i, -1)}>
                 <Icon name="chevronDown" size={16} style={{ transform: "rotate(180deg)" }} />
@@ -299,19 +320,22 @@ function ReorderSheet({ members, uid, nameOf, onClose }: {
 }
 
 function RotationRow({
-  m, month, name, avatarUrl, isRecipient, isCollector, status, canKick, confirming, onConfirmKick, onKick,
+  m, month, name, shares, avatarUrl, isRecipient, isCollector, status, canKick, canDropSeat, confirming, onConfirmKick, onKick, onDropSeat,
 }: {
   m: CommitteeMember;
   month: number;
   name: string;
+  shares: number;
   avatarUrl?: string | null;
   isRecipient: boolean;
   isCollector: boolean;
   status?: "pending" | "received";
   canKick: boolean;
+  canDropSeat: boolean;
   confirming: boolean;
   onConfirmKick: () => void;
   onKick: () => void;
+  onDropSeat: () => void;
 }) {
   return (
     <div className="list-row">
@@ -322,6 +346,7 @@ function RotationRow({
       <div className="flex-1 min-w-0">
         <div className="text-[16px] font-medium truncate">
           {name}
+          {shares > 1 && <span className="text-tint text-[12px] font-semibold"> ×{shares}</span>}
           {isCollector && <span className="text-sub text-[12px]"> · collector</span>}
         </div>
         <div className="text-[13px] text-sub truncate">
@@ -330,6 +355,11 @@ function RotationRow({
       </div>
       {status === "received" && <Icon name="check" size={16} className="text-green shrink-0" />}
       {status === "pending" && <span className="pill bg-[rgba(255,159,10,0.15)] text-orange shrink-0">Waiting</span>}
+      {canDropSeat && (
+        <button aria-label={`Remove one share from ${name}`} className="pill bg-card2 text-sub shrink-0" onClick={onDropSeat}>
+          −1
+        </button>
+      )}
       {canKick &&
         (confirming ? (
           <button className="pill text-red shrink-0" style={{ background: "rgba(255,69,58,0.15)" }} onClick={onKick}>
@@ -344,10 +374,10 @@ function RotationRow({
   );
 }
 
-function PaySheet({ committee, month, uid, currency, onClose }: {
-  committee: Committee; month: number; uid: string; currency: string; onClose: () => void;
+function PaySheet({ committee, month, due, uid, currency, onClose }: {
+  committee: Committee; month: number; due: number; uid: string; currency: string; onClose: () => void;
 }) {
-  const [amount, setAmount] = useState(String(committee.amount));
+  const [amount, setAmount] = useState(String(due));
   const [date, setDate] = useState(toISODate(new Date()));
   const parsed = parseFloat(amount.replace(/,/g, "")) || 0;
   return (
@@ -401,13 +431,13 @@ function CommitteeSettingsSheet({ committee, members, uid, nameOf, onClose }: {
       </div>
       <label className="section-title">Who collects the money?</label>
       <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6">
-        {members.map((m) => (
+        {[...new Set(members.map((m) => m.user_id))].map((id) => (
           <button
-            key={m.user_id}
-            className={`pill shrink-0 ${collector === m.user_id ? "bg-tint text-white" : "bg-card2 text-sub"}`}
-            onClick={() => setCollector(m.user_id)}
+            key={id}
+            className={`pill shrink-0 ${collector === id ? "bg-tint text-white" : "bg-card2 text-sub"}`}
+            onClick={() => setCollector(id)}
           >
-            {nameOf(m.user_id).split(" ")[0]}
+            {nameOf(id).split(" ")[0]}
           </button>
         ))}
       </div>

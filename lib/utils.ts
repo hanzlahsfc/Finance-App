@@ -5,6 +5,13 @@ export function uuid(): string {
 /** Only this user keeps the Obligations tab — everyone else gets Trip. */
 export const OBLIGATIONS_USERNAME = "hanzlah";
 
+/** Landing dashboard for a member's granted views. */
+export function primaryView(views: string[]): string {
+  if (views.includes("trip")) return "/trip";
+  if (views.includes("committee")) return "/committee";
+  return "/";
+}
+
 import { isAmountsHidden } from "./privacy";
 
 export function formatMoney(amount: number, currency = "PKR", raw = false): string {

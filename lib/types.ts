@@ -10,6 +10,7 @@ export interface Profile {
   avatar_url: string | null;
   currency: string;
   savings_percent: number;
+  admin?: boolean;
   email?: string | null;
   show_email?: boolean;
   created_at?: string;
@@ -205,6 +206,7 @@ export interface Committee {
 }
 
 export interface CommitteeMember {
+  id: string;
   committee_id: string;
   user_id: string;
   position: number;
@@ -242,4 +244,13 @@ export interface BusinessEntry {
   txn_id?: string | null;
   occurred_at: string;
   created_at?: string;
+}
+
+export const DASHBOARD_VIEWS = ["trip", "balance", "committee"] as const;
+export type DashboardView = (typeof DASHBOARD_VIEWS)[number];
+
+export interface UserView {
+  user_id: string;
+  views: string[];
+  updated_at?: string;
 }

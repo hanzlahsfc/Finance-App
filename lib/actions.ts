@@ -26,6 +26,7 @@ import type {
   CommitteePayment,
   BusinessEntry,
   BusinessKind,
+  UserView,
 } from "./types";
 
 // ---------- transactions ----------
@@ -595,6 +596,7 @@ export async function createCommittee(input: {
   };
   const memberIds = [...new Set([input.created_by, input.collector_id, ...input.member_ids])];
   const members: CommitteeMember[] = memberIds.map((uid, i) => ({
+    id: uuid(),
     committee_id: committee.id,
     user_id: uid,
     position: i + 1,
@@ -606,7 +608,7 @@ export async function createCommittee(input: {
   for (const m of members) {
     await db().outbox.add({
       op_id: uuid(), table: "committee_members", action: "insert",
-      payload: { committee_id: m.committee_id, user_id: m.user_id, position: m.position, added_by: m.added_by, localRow: m },
+      payload: { ...m, localRow: m },
       created_at: Date.now(), attempts: 0,
     });
   }
@@ -619,42 +621,57 @@ export async function updateCommittee(c: Committee, patch: Partial<Pick<Committe
   await enqueue("committees", "update", { id: c.id, localRow: merged, localPatch: patch });
 }
 
+/** Add one seat (share) — the same person can hold several. */
 export async function addCommitteeMember(committeeId: string, userId: string, addedBy: string) {
   const existing = await db().committee_members.where("committee_id").equals(committeeId).toArray();
   const position = existing.reduce((mx, m) => Math.max(mx, m.position), 0) + 1;
-  const m: CommitteeMember = { committee_id: committeeId, user_id: userId, position, added_by: addedBy };
-  await enqueue("committee_members", "insert", {
-    committee_id: committeeId, user_id: userId, position, added_by: addedBy, localRow: m,
-  });
+  const m: CommitteeMember = { id: uuid(), committee_id: committeeId, user_id: userId, position, added_by: addedBy };
+  await enqueue("committee_members", "insert", { ...m, localRow: m });
 }
 
+/** Remove all of a user's seats (kick). */
 export async function removeCommitteeMember(committeeId: string, userId: string) {
-  await enqueue("committee_members", "delete", { committee_id: committeeId, user_id: userId });
+  const seats = await db().committee_members
+    .where("committee_id").equals(committeeId)
+    .filter((m) => m.user_id === userId)
+    .toArray();
+  for (const s of seats) await enqueue("committee_members", "delete", { id: s.id });
 }
 
-/** Admin reorders payout positions. Two passes avoid unique(committee_id, position) collisions. */
-export async function reorderCommitteeMembers(committeeId: string, orderedUserIds: string[]) {
+/** Remove a single seat by member row id. */
+export async function removeCommitteeSeat(memberId: string) {
+  await enqueue("committee_members", "delete", { id: memberId });
+}
+
+/** Admin reorders payout slots. Two passes avoid unique(committee_id, position) collisions. */
+export async function reorderCommitteeMembers(committeeId: string, orderedMemberIds: string[]) {
   const members = await db().committee_members.where("committee_id").equals(committeeId).toArray();
-  const byId = new Map(members.map((m) => [m.user_id, m]));
-  const reordered = orderedUserIds
-    .map((uid, i) => ({ ...byId.get(uid)!, position: i + 1 }))
-    .filter((m) => m.user_id);
+  const byId = new Map(members.map((m) => [m.id, m]));
+  const reordered = orderedMemberIds
+    .map((mid, i) => ({ ...byId.get(mid)!, position: i + 1 }))
+    .filter((m) => m.id);
   await db().committee_members.bulkPut(reordered);
   for (const m of reordered) {
     await db().outbox.add({
       op_id: uuid(), table: "committee_members", action: "update",
-      payload: { committee_id: m.committee_id, user_id: m.user_id, localPatch: { position: m.position + 10000 } },
+      payload: { id: m.id, localPatch: { position: m.position + 10000 } },
       created_at: Date.now(), attempts: 0,
     });
   }
   for (const m of reordered) {
     await db().outbox.add({
       op_id: uuid(), table: "committee_members", action: "update",
-      payload: { committee_id: m.committee_id, user_id: m.user_id, localPatch: { position: m.position } },
+      payload: { id: m.id, localPatch: { position: m.position } },
       created_at: Date.now(), attempts: 0,
     });
   }
   void flush();
+}
+
+/** Admin grants which dashboards a member can open. */
+export async function setUserViews(userId: string, views: string[]) {
+  const row: UserView = { user_id: userId, views, updated_at: new Date().toISOString() };
+  await enqueue("user_views", "insert", { ...row, localRow: row });
 }
 
 export async function deleteCommittee(id: string) {

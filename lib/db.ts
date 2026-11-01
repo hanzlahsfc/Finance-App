@@ -23,6 +23,7 @@ import type {
   CommitteePayment,
   CommitteePayout,
   BusinessEntry,
+  UserView,
 } from "./types";
 
 export interface OutboxItem {
@@ -56,7 +57,8 @@ class HisabDB extends Dexie {
   trip_members!: Table<TripMember, [string, string]>;
   trip_contributions!: Table<TripContribution, string>;
   committees!: Table<Committee, string>;
-  committee_members!: Table<CommitteeMember, [string, string]>;
+  committee_members!: Table<CommitteeMember, string>;
+  user_views!: Table<UserView, string>;
   committee_payments!: Table<CommitteePayment, string>;
   committee_payouts!: Table<CommitteePayout, string>;
   business_entries!: Table<BusinessEntry, string>;
@@ -99,6 +101,12 @@ class HisabDB extends Dexie {
     });
     this.version(7).stores({
       business_entries: "id, user_id, occurred_at",
+    });
+    // v8: committee_members moves to a surrogate id pk (a person can hold
+    // multiple seats); Dexie recreates the table — mirror repopulates on pull.
+    this.version(8).stores({
+      committee_members: "id, committee_id, user_id",
+      user_views: "user_id",
     });
   }
 }

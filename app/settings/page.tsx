@@ -5,18 +5,64 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp, useSyncState } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
-import { updateProfile, uploadAvatar, deletePlan } from "@/lib/actions";
+import { updateProfile, uploadAvatar, deletePlan, setUserViews } from "@/lib/actions";
 import { pullAll, flush } from "@/lib/sync";
 import { exportData, importData } from "@/lib/backup";
 import { Card, SectionTitle, ListRow, Avatar, Segmented } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 import { Icon } from "@/components/Icon";
 import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
-import { usePlans } from "@/lib/hooks";
+import { usePlans, useProfileMap, useAllUserViews } from "@/lib/hooks";
 import { OBLIGATIONS_USERNAME } from "@/lib/utils";
 import { toggleAmountsHidden } from "@/lib/privacy";
 import { PlanSheet } from "@/components/PlanSheet";
 import type { Plan } from "@/lib/types";
+import { DASHBOARD_VIEWS } from "@/lib/types";
+
+const VIEW_LABELS: Record<string, string> = { trip: "Trip", balance: "Balancing", committee: "Committee" };
+
+/** Admin: pick which dashboards each member can open. */
+function AccessSection({ uid }: { uid: string }) {
+  const profileMap = useProfileMap();
+  const viewRows = useAllUserViews();
+  const members = [...profileMap.values()].filter((p) => p.id !== uid);
+  if (members.length === 0) return null;
+  return (
+    <>
+      <SectionTitle>Who sees what</SectionTitle>
+      <Card className="mb-6">
+        {members.map((p) => {
+          const views = viewRows.find((v) => v.user_id === p.id)?.views ?? ["trip"];
+          const toggle = async (v: string) => {
+            const next = views.includes(v) ? views.filter((x) => x !== v) : [...views, v];
+            await setUserViews(p.id, next.length ? next : ["trip"]);
+          };
+          return (
+            <div key={p.id} className="list-row">
+              <Avatar name={p.display_name} id={p.id} size={36} src={p.avatar_url} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[15px] font-medium truncate">{p.display_name}</div>
+                <div className="text-[12px] text-sub">@{p.username}</div>
+              </div>
+              <div className="flex flex-col gap-1 items-end">
+                {DASHBOARD_VIEWS.map((v) => (
+                  <button
+                    key={v}
+                    className={`pill ${views.includes(v) ? "bg-tint text-white" : "bg-card2 text-sub"}`}
+                    style={{ fontSize: 11, padding: "4px 10px" }}
+                    onClick={() => void toggle(v)}
+                  >
+                    {views.includes(v) ? "✓ " : ""}{VIEW_LABELS[v]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </Card>
+    </>
+  );
+}
 
 const CURRENCIES = ["PKR", "USD", "EUR", "GBP", "AED", "INR"];
 
@@ -83,6 +129,8 @@ export default function SettingsPage() {
           </Card>
         </>
       )}
+
+      {(profile?.username === OBLIGATIONS_USERNAME || profile?.admin) && <AccessSection uid={session.user.id} />}
 
       {myPlans.length > 0 && (
         <>

@@ -16,6 +16,7 @@ import { subscribePrivacy, getPrivacySnapshot } from "./privacy";
 import { initSync, teardownSync, subscribeSync, getSyncState } from "./sync";
 import { updateProfile } from "./actions";
 import { ensureDemoData, DEMO_SESSION } from "./demo";
+import { OBLIGATIONS_USERNAME, primaryView } from "./utils";
 import { db } from "./db";
 import type { Profile } from "./types";
 
@@ -122,6 +123,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       router.replace("/");
     }
   }, [ready, session, profile, pathname, router]);
+
+  // Dashboard access: admins granted views decide which surfaces a
+  // member can open. Missing user_views row = trip only (legacy default).
+  const grantedViews = useLiveQuery(
+    async () => (uid ? ((await db().user_views.get(uid))?.views ?? ["trip"]) : undefined),
+    [uid],
+    undefined
+  );
+  const isOwner = !!profile && (profile.username === OBLIGATIONS_USERNAME || !!profile.admin);
+
+  useEffect(() => {
+    if (!ready || !session || !profile || isOwner || grantedViews === undefined) return;
+    const alwaysOpen = (p: string) =>
+      PUBLIC_PATHS.some((x) => p.startsWith(x)) ||
+      p.startsWith("/settings") ||
+      p.startsWith("/onboarding");
+    if (alwaysOpen(pathname)) return;
+    const ok = pathname.startsWith("/trip")
+      ? grantedViews.includes("trip")
+      : pathname.startsWith("/committee")
+        ? grantedViews.includes("committee")
+        : grantedViews.includes("balance");
+    if (!ok) router.replace(primaryView(grantedViews));
+  }, [ready, session, profile, isOwner, grantedViews, pathname, router]);
 
   return <AppCtx.Provider value={{ session, profile, ready, amountsHidden }}>{children}</AppCtx.Provider>;
 }

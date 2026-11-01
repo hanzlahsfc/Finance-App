@@ -13,6 +13,7 @@ create table public.profiles (
   avatar_url text,
   currency text not null default 'PKR',
   savings_percent numeric(5,2) not null default 20,
+  admin boolean not null default false,
   created_at timestamptz not null default now(),
   constraint username_format check (username ~ '^[a-z0-9_]{3,20}$')
 );
@@ -179,12 +180,12 @@ create table public.committees (
 );
 
 create table public.committee_members (
+  id uuid primary key default gen_random_uuid(),
   committee_id uuid not null references public.committees(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   position int not null check (position > 0),
   added_by uuid references public.profiles(id),
   added_at timestamptz not null default now(),
-  primary key (committee_id, user_id),
   unique (committee_id, position)
 );
 
@@ -209,6 +210,13 @@ create table public.committee_payouts (
 );
 
 create index idx_committee_pay on public.committee_payments (committee_id, month);
+
+-- dashboard access per member (admin-managed)
+create table public.user_views (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  views text[] not null default '{trip}',
+  updated_at timestamptz not null default now()
+);
 
 -- ============ BUSINESS (Samzlah income & expenses) ============
 create table public.business_entries (
@@ -329,6 +337,7 @@ alter table public.committee_members enable row level security;
 alter table public.committee_payments enable row level security;
 alter table public.committee_payouts enable row level security;
 alter table public.business_entries enable row level security;
+alter table public.user_views enable row level security;
 
 -- profiles: anyone signed in can look up users (needed for friend search);
 -- only you can create/edit your own row.
@@ -490,6 +499,17 @@ create policy committee_payouts_delete on public.committee_payouts for delete to
 -- business entries: owner only, like transactions
 create policy business_entries_all on public.business_entries for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- user_views: self or admin reads; only admins grant dashboards
+create or replace function public.is_admin()
+returns boolean
+language sql stable security definer set search_path = public as
+$$ select exists (select 1 from profiles where id = auth.uid() and admin) $$;
+
+create policy user_views_read on public.user_views for select to authenticated
+  using (user_id = auth.uid() or public.is_admin());
+create policy user_views_write on public.user_views for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
 
 -- ============ REALTIME ============
 alter publication supabase_realtime add table public.activities;

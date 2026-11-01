@@ -4,8 +4,8 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp, useSyncState } from "@/lib/store";
-import { useTransactions, useWeekTransactions, useIncome, useBills, useBillPayments, billPaidThisPeriod, useGroups, useOwedToMe, todaySpend, useBusinessSaveTxnIds } from "@/lib/hooks";
-import { formatMoney, weekKey, formatDayLabel, OBLIGATIONS_USERNAME } from "@/lib/utils";
+import { useTransactions, useWeekTransactions, useIncome, useBills, useBillPayments, billPaidThisPeriod, useGroups, useOwedToMe, todaySpend, useBusinessSaveTxnIds, useUserViews } from "@/lib/hooks";
+import { formatMoney, weekKey, formatDayLabel, OBLIGATIONS_USERNAME, primaryView } from "@/lib/utils";
 import { Card, SectionTitle, ListRow, Avatar, EmptyState, EyeToggle } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { categoryById } from "@/lib/categories";
@@ -35,13 +35,17 @@ export default function Home() {
   const left = pay - setAside - spent;
   const billsDue = bills.filter((b) => !billPaidThisPeriod(b, payments));
 
-  // Everyone except the owner only gets the trip — home redirects there.
+  // Members without the 'balance' dashboard get sent to their primary view.
   const router = useRouter();
+  const isOwner = !!profile && (profile.username === OBLIGATIONS_USERNAME || !!profile.admin);
+  const memberViews = useUserViews(uid)?.views;
   useEffect(() => {
-    if (profile && profile.username !== OBLIGATIONS_USERNAME) router.replace("/trip");
-  }, [profile, router]);
+    if (profile && !isOwner && memberViews && !memberViews.includes("balance")) {
+      router.replace(primaryView(memberViews));
+    }
+  }, [profile, isOwner, memberViews, router]);
 
-  if (!session || (profile && profile.username !== OBLIGATIONS_USERNAME)) return null;
+  if (!session || (profile && !isOwner && memberViews && !memberViews.includes("balance"))) return null;
 
   return (
     <div className="screen px-5 pt-14">
