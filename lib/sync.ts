@@ -227,7 +227,9 @@ export async function pullAll(): Promise<void> {
         sb.from("business_entries").select("*"),
         sb.from("user_views").select("*"),
       ]);
-    for (const r of [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes, plansRes, tripsRes, tmRes, tcRes, comRes, cmRes, cpRes, cpoRes, bizRes, viewsRes]) {
+    // viewsRes is intentionally absent — user_views may not exist on the
+    // server yet (pending migration); a missing table must not kill pull.
+    for (const r of [profilesRes, friendsRes, incomeRes, billsRes, billPayRes, txnRes, gmRes, groupsRes, obligRes, goalsRes, plansRes, tripsRes, tmRes, tcRes, comRes, cmRes, cpRes, cpoRes, bizRes]) {
       if (r.error) throw r.error;
     }
 
