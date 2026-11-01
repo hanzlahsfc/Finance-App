@@ -102,9 +102,12 @@ class HisabDB extends Dexie {
     this.version(7).stores({
       business_entries: "id, user_id, occurred_at",
     });
-    // v8: committee_members moves to a surrogate id pk (a person can hold
-    // multiple seats); Dexie recreates the table — mirror repopulates on pull.
+    // v8 drops the composite-key table — Dexie can't reliably upgrade a
+    // primary key in place; v9 recreates it with the surrogate id pk.
     this.version(8).stores({
+      committee_members: null,
+    });
+    this.version(9).stores({
       committee_members: "id, committee_id, user_id",
       user_views: "user_id",
     });
