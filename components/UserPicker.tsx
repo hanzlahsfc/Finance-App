@@ -12,11 +12,13 @@ export function UserPicker({
   uid,
   excludeIds,
   actionLabel = "Add",
+  includeSelf = false,
   onPick,
 }: {
   uid: string;
   excludeIds?: Set<string>;
   actionLabel?: string;
+  includeSelf?: boolean;
   onPick: (p: Profile) => void;
 }) {
   const [q, setQ] = useState("");
@@ -39,12 +41,13 @@ export function UserPicker({
       try {
         const pattern = t.replace(/[%_,]/g, "");
         if (pattern) {
-          const { data, error } = await supabase()
+          let query = supabase()
             .from("profiles")
             .select("id, username, display_name, avatar_url")
-            .neq("id", uid)
             .or(`username.ilike.%${pattern}%,display_name.ilike.%${pattern}%`)
             .limit(10);
+          if (!includeSelf) query = query.neq("id", uid);
+          const { data, error } = await query;
           if (!error && data) {
             const merged = await Promise.all(
               data.map(async (d) => ({ ...(await db().profiles.get(d.id)), ...d }))
@@ -59,7 +62,7 @@ export function UserPicker({
     }
 
     const rows = await db()
-      .profiles.filter((p) => p.id !== uid && (p.username.includes(t) || p.display_name.toLowerCase().includes(t)))
+      .profiles.filter((p) => (includeSelf || p.id !== uid) && (p.username.includes(t) || p.display_name.toLowerCase().includes(t)))
       .limit(10)
       .toArray();
     setResults(rows);

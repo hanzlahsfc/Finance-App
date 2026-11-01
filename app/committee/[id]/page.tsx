@@ -249,6 +249,7 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
           <UserPicker
             uid={uid!}
             excludeIds={new Set()}
+            includeSelf
             onPick={async (p) => { await addCommitteeMember(committee.id, p.id, uid!); }}
           />
         </Sheet>

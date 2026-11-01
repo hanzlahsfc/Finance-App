@@ -273,6 +273,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
           <UserPicker
             uid={uid!}
             excludeIds={new Set(members.map((m) => m.user_id))}
+            includeSelf
             onPick={async (p) => { await addTripMember(trip.id, p.id, uid!); }}
           />
         </Sheet>
