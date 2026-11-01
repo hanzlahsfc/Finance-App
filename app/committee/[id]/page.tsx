@@ -62,6 +62,11 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
   const myPayment = monthPayments.find((p) => p.user_id === uid);
   const mySeats = seatsOf(uid ?? "");
   const statusOf = (userId: string) => monthPayments.find((p) => p.user_id === userId)?.status;
+  const monthLabel = (m: number) => {
+    const d = new Date(committee.start_month);
+    d.setMonth(d.getMonth() + m - 1);
+    return d.toLocaleString("en", { month: "short", year: "numeric" });
+  };
 
   return (
     <div className="screen px-5 pt-14">
@@ -148,7 +153,7 @@ export default function CommitteeDetailPage({ params }: { params: Promise<{ id: 
             <RotationRow
               key={m.id}
               m={m}
-              month={mMonth}
+              month={monthLabel(mMonth)}
               name={nameOf(m.user_id)}
               shares={shares}
               avatarUrl={profileMap.get(m.user_id)?.avatar_url}
@@ -347,11 +352,10 @@ function RotationRow({
       <div className="flex-1 min-w-0">
         <div className="text-[16px] font-medium truncate">
           {name}
-          {shares > 1 && <span className="text-tint text-[12px] font-semibold"> ×{shares}</span>}
           {isCollector && <span className="text-sub text-[12px]"> · collector</span>}
         </div>
         <div className="text-[13px] text-sub truncate">
-          {isRecipient ? "takes the pot this month" : `pot in month ${month}`}
+          {isRecipient ? `takes the pot · ${month}` : `pot · ${month}`}
         </div>
       </div>
       {status === "received" && <Icon name="check" size={16} className="text-green shrink-0" />}
